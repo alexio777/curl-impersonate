@@ -4005,7 +4005,7 @@ index c3270da1cc..807f0ad6ae 100644
   * Store nghttp2 version info in this buffer.
 diff --git a/lib/impersonate.c b/lib/impersonate.c
 new file mode 100644
-index 0000000000..042182fcad
+index 0000000000..8690a47bb7
 --- /dev/null
 +++ b/lib/impersonate.c
 @@ -0,0 +1,3155 @@
@@ -5337,8 +5337,8 @@ index 0000000000..042182fcad
 +    .alpn = true,
 +    .alps = true,
 +    .ech = "true",
-+    .http_header_order = "host,connection,content-length,pragma,cache-control,sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,sec-ch-ua-platform-version,sec-ch-ua-model,sec-ch-ua-bitness,sec-ch-ua-wow64,sec-ch-ua-full-version-list,sec-ch-ua-form-factors,upgrade-insecure-requests,content-type,user-agent,origin,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,cookie,priority",
-+    .http3_http_header_order = "host,connection,content-length,pragma,cache-control,sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,sec-ch-ua-platform-version,sec-ch-ua-model,sec-ch-ua-bitness,sec-ch-ua-wow64,sec-ch-ua-full-version-list,sec-ch-ua-form-factors,upgrade-insecure-requests,content-type,user-agent,origin,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,cookie,priority",
++    .http_header_order = "host,connection,content-length,pragma,cache-control,rtt,downlink,ect,sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,sec-ch-ua-platform-version,sec-ch-ua-model,sec-ch-ua-bitness,sec-ch-ua-wow64,sec-ch-ua-full-version-list,sec-ch-ua-form-factors,sec-ch-prefers-color-scheme,upgrade-insecure-requests,content-type,user-agent,origin,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,cookie,priority",
++    .http3_http_header_order = "host,connection,content-length,pragma,cache-control,rtt,downlink,ect,sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,sec-ch-ua-platform-version,sec-ch-ua-model,sec-ch-ua-bitness,sec-ch-ua-wow64,sec-ch-ua-full-version-list,sec-ch-ua-form-factors,sec-ch-prefers-color-scheme,upgrade-insecure-requests,content-type,user-agent,origin,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,cookie,priority",
 +    .tls_session_ticket = true,
 +    .tls_permute_extensions = true,
 +    .tls_grease = true,
@@ -5405,8 +5405,8 @@ index 0000000000..042182fcad
 +    .alpn = true,
 +    .alps = true,
 +    .ech = "true",
-+    .http_header_order = "host,connection,content-length,pragma,cache-control,sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,sec-ch-ua-platform-version,sec-ch-ua-model,sec-ch-ua-bitness,sec-ch-ua-wow64,sec-ch-ua-full-version-list,sec-ch-ua-form-factors,upgrade-insecure-requests,content-type,user-agent,origin,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,cookie,priority",
-+    .http3_http_header_order = "host,connection,content-length,pragma,cache-control,sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,sec-ch-ua-platform-version,sec-ch-ua-model,sec-ch-ua-bitness,sec-ch-ua-wow64,sec-ch-ua-full-version-list,sec-ch-ua-form-factors,upgrade-insecure-requests,content-type,user-agent,origin,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,cookie,priority",
++    .http_header_order = "host,connection,content-length,pragma,cache-control,rtt,downlink,ect,sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,sec-ch-ua-platform-version,sec-ch-ua-model,sec-ch-ua-bitness,sec-ch-ua-wow64,sec-ch-ua-full-version-list,sec-ch-ua-form-factors,sec-ch-prefers-color-scheme,upgrade-insecure-requests,content-type,user-agent,origin,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,cookie,priority",
++    .http3_http_header_order = "host,connection,content-length,pragma,cache-control,rtt,downlink,ect,sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,sec-ch-ua-platform-version,sec-ch-ua-model,sec-ch-ua-bitness,sec-ch-ua-wow64,sec-ch-ua-full-version-list,sec-ch-ua-form-factors,sec-ch-prefers-color-scheme,upgrade-insecure-requests,content-type,user-agent,origin,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,cookie,priority",
 +    .tls_session_ticket = true,
 +    .tls_permute_extensions = true,
 +    .tls_grease = true,
@@ -5473,8 +5473,8 @@ index 0000000000..042182fcad
 +    .alpn = true,
 +    .alps = true,
 +    .ech = "true",
-+    .http_header_order = "host,connection,content-length,pragma,cache-control,sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,sec-ch-ua-platform-version,sec-ch-ua-model,sec-ch-ua-bitness,sec-ch-ua-wow64,sec-ch-ua-full-version-list,sec-ch-ua-form-factors,upgrade-insecure-requests,content-type,user-agent,origin,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,cookie,priority",
-+    .http3_http_header_order = "host,connection,content-length,pragma,cache-control,sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,sec-ch-ua-platform-version,sec-ch-ua-model,sec-ch-ua-bitness,sec-ch-ua-wow64,sec-ch-ua-full-version-list,sec-ch-ua-form-factors,upgrade-insecure-requests,content-type,user-agent,origin,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,cookie,priority",
++    .http_header_order = "host,connection,content-length,pragma,cache-control,rtt,downlink,ect,sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,sec-ch-ua-platform-version,sec-ch-ua-model,sec-ch-ua-bitness,sec-ch-ua-wow64,sec-ch-ua-full-version-list,sec-ch-ua-form-factors,sec-ch-prefers-color-scheme,upgrade-insecure-requests,content-type,user-agent,origin,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,cookie,priority",
++    .http3_http_header_order = "host,connection,content-length,pragma,cache-control,rtt,downlink,ect,sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,sec-ch-ua-platform-version,sec-ch-ua-model,sec-ch-ua-bitness,sec-ch-ua-wow64,sec-ch-ua-full-version-list,sec-ch-ua-form-factors,sec-ch-prefers-color-scheme,upgrade-insecure-requests,content-type,user-agent,origin,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,cookie,priority",
 +    .tls_session_ticket = true,
 +    .tls_permute_extensions = true,
 +    .tls_grease = true,
@@ -5541,8 +5541,8 @@ index 0000000000..042182fcad
 +    .alpn = true,
 +    .alps = true,
 +    .ech = "true",
-+    .http_header_order = "host,connection,content-length,pragma,cache-control,sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,sec-ch-ua-platform-version,sec-ch-ua-model,sec-ch-ua-bitness,sec-ch-ua-wow64,sec-ch-ua-full-version-list,sec-ch-ua-form-factors,upgrade-insecure-requests,content-type,user-agent,origin,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,cookie,priority",
-+    .http3_http_header_order = "host,connection,content-length,pragma,cache-control,sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,sec-ch-ua-platform-version,sec-ch-ua-model,sec-ch-ua-bitness,sec-ch-ua-wow64,sec-ch-ua-full-version-list,sec-ch-ua-form-factors,upgrade-insecure-requests,content-type,user-agent,origin,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,cookie,priority",
++    .http_header_order = "host,connection,content-length,pragma,cache-control,rtt,downlink,ect,sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,sec-ch-ua-platform-version,sec-ch-ua-model,sec-ch-ua-bitness,sec-ch-ua-wow64,sec-ch-ua-full-version-list,sec-ch-ua-form-factors,sec-ch-prefers-color-scheme,upgrade-insecure-requests,content-type,user-agent,origin,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,cookie,priority",
++    .http3_http_header_order = "host,connection,content-length,pragma,cache-control,rtt,downlink,ect,sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,sec-ch-ua-platform-version,sec-ch-ua-model,sec-ch-ua-bitness,sec-ch-ua-wow64,sec-ch-ua-full-version-list,sec-ch-ua-form-factors,sec-ch-prefers-color-scheme,upgrade-insecure-requests,content-type,user-agent,origin,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,cookie,priority",
 +    .tls_session_ticket = true,
 +    .tls_permute_extensions = true,
 +    .tls_grease = true,
@@ -15583,29 +15583,3 @@ index cd41d8d6b8..eecf51751f 100644
    NV1(CURLOPT_TCP_NODELAY, 1),
    NV1(CURLOPT_PROXY_SSL_VERIFYPEER, 1),
    NV1(CURLOPT_PROXY_SSL_VERIFYHOST, 1),
-diff --git a/tests/http/test_12_reuse.py b/tests/http/test_12_reuse.py
-index b7a2513ef0..984cc7694c 100644
---- a/tests/http/test_12_reuse.py
-+++ b/tests/http/test_12_reuse.py
-@@ -70,6 +70,21 @@ class TestReuse:
-         # Connections time out on server before we send another request,
-         assert r.total_connects == count
- 
-+    @pytest.mark.skipif(condition=not Env.have_h3(), reason="h3 not supported")
-+    def test_12_03_h3_local_conn_timeout(self, env: Env, httpd, nghttpx):
-+        count = 2
-+        curl = CurlClient(env=env)
-+        urln = f'https://{env.authority_for(env.domain1, "h3")}' \
-+            f'/data.json?[0-{count - 1}]'
-+        r = curl.http_download(urls=[urln], alpn_proto='h3', extra_args=[
-+            '--quic-transport-params', '1:1000',
-+            '--rate', '30/m',
-+            '--max-time', '5',
-+        ])
-+        r.check_response(count=count, http_status=200)
-+        # The local idle timeout expires before the second request.
-+        assert r.total_connects == count
-+
-     # After a partial/aborted HTTP/1.1 response the connection must not be
-     # reused (multi_conn_should_close with premature on non-multiplexed conn).
-     @pytest.mark.parametrize("proto", ['http/1.1'])
