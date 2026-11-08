@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import json
 import random
@@ -87,6 +88,55 @@ for path in pathlib.Path("signatures").glob("**/*.yaml"):
                 ),
             ]
         )
+
+
+# Canonical Chromium wire header order for the exact dynamic POST tests
+# (test_exact_dynamic_header_order_http2/http3 below).
+# Source: Chromium net/url_request/url_request_http_job.cc and
+# net/spdy/spdy_http_utils.cc header emission order (30 preset tokens
+# minus "host,connection", which become :authority / are dropped on
+# the H2/H3 wire). This is an independent oracle: it is intentionally
+# NOT derived from the preset http_header_order/http3_http_header_order
+# strings, so preset drift from Chromium fails instead of passing
+# tautologically. Keep this constant verbatim in sync with
+# CANONICAL_WIRE_HEADER_ORDER in build/gen/verify_cft.py.
+CANONICAL_WIRE_HEADER_ORDER = (
+    "content-length",
+    "pragma",
+    "cache-control",
+    "sec-ch-ua",
+    "sec-ch-ua-mobile",
+    "sec-ch-ua-full-version",
+    "sec-ch-ua-arch",
+    "sec-ch-ua-platform",
+    "sec-ch-ua-platform-version",
+    "sec-ch-ua-model",
+    "sec-ch-ua-bitness",
+    "sec-ch-ua-wow64",
+    "sec-ch-ua-full-version-list",
+    "sec-ch-ua-form-factors",
+    "upgrade-insecure-requests",
+    "content-type",
+    "user-agent",
+    "origin",
+    "accept",
+    "sec-fetch-site",
+    "sec-fetch-mode",
+    "sec-fetch-user",
+    "sec-fetch-dest",
+    "referer",
+    "accept-encoding",
+    "accept-language",
+    "cookie",
+    "priority",
+)
+
+EXACT_DYNAMIC_PROFILES = [
+    "chrome156",
+    "chrome156_macos",
+    "chrome157",
+    "chrome157_macos",
+]
 
 
 @pytest.fixture
@@ -875,3 +925,246 @@ async def test_user_agent_curlopt_useragent(
     for header in headers:
         if header.lower().startswith("user-agent:"):
             assert header[len("user-agent:") :].strip() == user_agent
+
+
+def _exact_dynamic_inputs(profile, base_headers):
+    """Explicit per-test dynamic header values (not from the preset)."""
+    version = re.search(r"chrome(\d+)", profile).group(1)
+    return {
+        # From "-d a=1".
+        "content-length": "3",
+        "content-type": "application/x-www-form-urlencoded",
+        # Passed via -H.
+        "pragma": "no-cache",
+        "cache-control": "no-cache",
+        "sec-ch-ua-full-version": f'"{version}.0.0.0"',
+        "sec-ch-ua-arch": '"x86"',
+        "sec-ch-ua-platform": base_headers["sec-ch-ua-platform"],
+        "sec-ch-ua-platform-version": '"15.0.0"',
+        "sec-ch-ua-model": '""',
+        "sec-ch-ua-bitness": '"64"',
+        "sec-ch-ua-wow64": "?0",
+        "sec-ch-ua-full-version-list": (
+            f'"Chromium";v="{version}.0.0.0", '
+            f'"Google Chrome";v="{version}.0.0.0"'
+        ),
+        "sec-ch-ua-form-factors": '"Desktop"',
+        "origin": "https://example.com",
+        # Auto-computed from cross-site "-e https://example.com/".
+        "sec-fetch-site": "cross-site",
+        # From "-e https://example.com/" and "-b sid=1".
+        "referer": "https://example.com/",
+        "cookie": "sid=1",
+    }
+
+
+def _expected_exact_dynamic_headers(browser_signatures, profile):
+    """Expected [(name, value)] wire sequence for the exact POST tests.
+
+    Base header values come from the profile's H2 signature HEADERS
+    frame; dynamic values come from _exact_dynamic_inputs. The order
+    is CANONICAL_WIRE_HEADER_ORDER only -- never the preset string and
+    never the observed output.
+    """
+    frames = browser_signatures[profile]["signature"]["http2"]["frames"]
+    headers_frame = next(f for f in frames if f["frame_type"] == "HEADERS")
+    base_headers = {}
+    for header in headers_frame["headers"]:
+        if isinstance(header, (list, tuple)):
+            name, value = header[0], header[1]
+        else:
+            name, _, value = header.partition(": ")
+        base_headers[name.lower()] = value
+    dynamic = _exact_dynamic_inputs(profile, base_headers)
+    values = {**base_headers, **dynamic}
+    expected = [(name, values[name]) for name in CANONICAL_WIRE_HEADER_ORDER]
+    return expected, dynamic
+
+
+def _exact_dynamic_curl_args(dynamic):
+    """POST arguments in deliberately scrambled (non-canonical) order."""
+    def header(name):
+        return ["-H", f"{name}: {dynamic[name]}"]
+
+    args = []
+    # Origin first: canonically it must end up after every Sec-CH-UA-*.
+    args += header("origin")
+    args += ["-b", dynamic["cookie"]]
+    # High-entropy Sec-CH-UA-* in reverse canonical order.
+    for name in (
+        "sec-ch-ua-form-factors",
+        "sec-ch-ua-full-version-list",
+        "sec-ch-ua-wow64",
+        "sec-ch-ua-bitness",
+        "sec-ch-ua-model",
+        "sec-ch-ua-platform-version",
+        "sec-ch-ua-arch",
+        "sec-ch-ua-full-version",
+        "sec-ch-ua-platform",
+    ):
+        args += header(name)
+    args += ["-e", dynamic["referer"], "-d", "a=1"]
+    # Canonically second/third, supplied last.
+    args += header("cache-control")
+    args += header("pragma")
+    return args
+
+
+def _run_curl_capture_stderr(curl_binary, extra_args, url):
+    """Run curl capturing stderr (for the HTTP/3 verbose nva dump).
+
+    Separate helper: the contract of _run_curl is unchanged.
+    """
+    args = [
+        curl_binary,
+        "-o",
+        "/dev/null",
+        "--local-port",
+        f"{LOCAL_PORTS[0]}-{LOCAL_PORTS[1]}",
+    ]
+    if extra_args:
+        args += extra_args
+    args.append(url)
+    logging.debug("running curl with: %s", " ".join(args))
+    proc = subprocess.run(
+        args, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=60
+    )
+    return proc.returncode, proc.stderr.decode("utf-8", errors="replace")
+
+
+_HTTP3_VERBOSE_HEADER_RE = re.compile(r"\[HTTP/3\] \[(\d+)\] \[([^\]]+)\]")
+
+
+def _parse_http3_verbose_headers(stderr):
+    """Parse "[HTTP/3] [sid] [name: value]" lines of the first stream.
+
+    Splits on the first ": " (pseudo-headers like ":method: POST"
+    survive: their leading colon is not followed by a space).
+    Returns (pseudo_pairs, regular_pairs).
+    """
+    streams = {}
+    for match in _HTTP3_VERBOSE_HEADER_RE.finditer(stderr):
+        stream_id, field = match.group(1), match.group(2)
+        if ": " not in field:
+            continue
+        name, value = field.split(": ", 1)
+        streams.setdefault(stream_id, []).append((name, value))
+    assert streams, (
+        "no [HTTP/3] verbose header dump found in curl stderr; "
+        f"stderr tail: {stderr[-2000:]!r}"
+    )
+    first_stream = next(iter(streams.values()))
+    pseudo = [pair for pair in first_stream if pair[0].startswith(":")]
+    regular = [
+        (name.lower(), value)
+        for name, value in first_stream
+        if not name.startswith(":")
+    ]
+    return pseudo, regular
+
+
+_NGHTTPD_HEADER_LINE_RE = re.compile(
+    r"recv \(stream_id=\d+(?:, [^)]*)?\) (.+)$"
+)
+
+
+def _parse_nghttpd_headers_frame(output):
+    """Extract (pseudo_names, [(name, value)]) of the first HEADERS frame.
+
+    Deliberately not th1's parse_nghttpd_log: its header-line regex
+    requires "(stream_id=N)" exactly, so nghttpd's
+    "(stream_id=1, sensitive) cookie: ..." line is silently dropped
+    and the cookie would be missing from the observed sequence.
+    """
+    pseudo = []
+    regular = []
+    for line in output.decode("utf-8", errors="replace").splitlines():
+        if "recv HEADERS frame" in line:
+            break
+        match = _NGHTTPD_HEADER_LINE_RE.search(line)
+        if not match:
+            continue
+        header = match.group(1)
+        if header.startswith(":"):
+            pseudo.append(re.match(r"(:\w+):", header).group(1))
+        else:
+            name, _, value = header.partition(": ")
+            regular.append((name.lower(), value))
+    assert regular, "no HEADERS frame headers found in nghttpd log"
+    return pseudo, regular
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("profile", EXACT_DYNAMIC_PROFILES)
+async def test_exact_dynamic_header_order_http2(
+    pytestconfig, nghttpd, browser_signatures, profile
+):
+    """Exact dynamic POST header (name, value) sequence over HTTP/2."""
+    curl_binary = os.path.join(
+        pytestconfig.getoption("install_dir"), "bin", f"curl_{profile}"
+    )
+    expected, dynamic = _expected_exact_dynamic_headers(
+        browser_signatures, profile
+    )
+
+    ret = _run_curl(
+        curl_binary,
+        env_vars=None,
+        extra_args=["-k"] + _exact_dynamic_curl_args(dynamic),
+        urls=["https://localhost:8443/"],
+    )
+    assert ret == 0
+
+    output = await _read_proc_output(nghttpd, timeout=5)
+    assert len(output) > 0, "nghttpd produced no log output"
+
+    pseudo, actual = _parse_nghttpd_headers_frame(output)
+    assert pseudo == [
+        ":method",
+        ":authority",
+        ":scheme",
+        ":path",
+    ]
+    assert actual == expected
+
+
+@pytest.mark.parametrize("profile", EXACT_DYNAMIC_PROFILES)
+def test_exact_dynamic_header_order_http3(
+    pytestconfig, browser_signatures, profile
+):
+    """Exact dynamic POST header (name, value) sequence over HTTP/3.
+
+    Captured from curl's verbose "[HTTP/3] [sid] [name: value]" dump
+    of the nva array handed to nghttp3_conn_submit_request; the fp
+    endpoint only provides the QUIC handshake (its HTTP status for
+    POST is irrelevant, hence no -f).
+    """
+    curl_binary = os.path.join(
+        pytestconfig.getoption("install_dir"), "bin", f"curl_{profile}"
+    )
+    expected, dynamic = _expected_exact_dynamic_headers(
+        browser_signatures, profile
+    )
+
+    ret, stderr = None, ""
+    for attempt in range(2):
+        ret, stderr = _run_curl_capture_stderr(
+            curl_binary,
+            extra_args=["-v", "--http3-only"] + _exact_dynamic_curl_args(dynamic),
+            url="https://fp.impersonate.pro/api/http3",
+        )
+        if ret == 0:
+            break
+        logging.warning("HTTP/3 exact header attempt %d failed", attempt + 1)
+    assert ret == 0, (
+        f"curl exited with {ret} (network error?); stderr tail: {stderr[-2000:]!r}"
+    )
+
+    pseudo, actual = _parse_http3_verbose_headers(stderr)
+    assert pseudo == [
+        (":method", "POST"),
+        (":authority", "fp.impersonate.pro"),
+        (":scheme", "https"),
+        (":path", "/api/http3"),
+    ]
+    assert actual == expected
