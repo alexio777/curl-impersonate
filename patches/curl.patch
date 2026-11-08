@@ -3533,7 +3533,7 @@ index c3270da1cc..807f0ad6ae 100644
   * Store nghttp2 version info in this buffer.
 diff --git a/lib/impersonate.c b/lib/impersonate.c
 new file mode 100644
-index 0000000000..94b339b7ad
+index 0000000000..a23a6580c7
 --- /dev/null
 +++ b/lib/impersonate.c
 @@ -0,0 +1,3155 @@
@@ -4861,12 +4861,12 @@ index 0000000000..94b339b7ad
 +    .sig_hash_algs = "mldsa44:mldsa65:mldsa87:ecdsa_secp256r1_sha256:rsa_pss_rsae_sha256:rsa_pkcs1_sha256:ecdsa_secp384r1_sha384:rsa_pss_rsae_sha384:rsa_pkcs1_sha384:rsa_pss_rsae_sha512:rsa_pkcs1_sha512",
 +    .cert_compression = "brotli",
 +    .tls_delegated_credentials = NULL,
-+    .tls_trust_anchors = "11129.9.11,11129.9.7,52580.200109.1.18,11129.9.10,11129.9.8,44947.2.13,44947.2.14,44947.2.1,52580.200109.1.11,11129.9.15,44947.2.20,11129.9.1,11129.9.4,11129.9.12,44947.2.18,44947.2.15,11129.9.13,52580.200109.1.13,52580.200109.1.10,52580.200109.1.12,52580.200109.1.9,11129.9.6,52580.200109.1.7,11129.9.5,44947.2.6,52580.200109.1.19,44947.2.19,52580.200109.1.8",
++    .tls_trust_anchors = "44947.2.1,44947.2.6,44947.2.13,44947.2.14,44947.2.15,44947.2.18,44947.2.19,44947.2.20,52580.200109.1.7,52580.200109.1.8,52580.200109.1.9,52580.200109.1.10,52580.200109.1.11,52580.200109.1.12,52580.200109.1.13,52580.200109.1.18,52580.200109.1.19,11129.9.1,11129.9.4,11129.9.5,11129.9.6,11129.9.7,11129.9.8,11129.9.10,11129.9.11,11129.9.12,11129.9.13,11129.9.15",
 +    .alpn = true,
 +    .alps = true,
 +    .ech = "true",
-+    .http_header_order = "sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-platform,upgrade-insecure-requests,user-agent,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,priority,cookie",
-+    .http3_http_header_order = "sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-platform,upgrade-insecure-requests,user-agent,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,priority,cookie",
++    .http_header_order = "host,connection,content-length,pragma,cache-control,sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,sec-ch-ua-platform-version,sec-ch-ua-model,sec-ch-ua-bitness,sec-ch-ua-wow64,sec-ch-ua-full-version-list,sec-ch-ua-form-factors,upgrade-insecure-requests,origin,content-type,user-agent,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,cookie,priority",
++    .http3_http_header_order = "host,connection,content-length,pragma,cache-control,sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,sec-ch-ua-platform-version,sec-ch-ua-model,sec-ch-ua-bitness,sec-ch-ua-wow64,sec-ch-ua-full-version-list,sec-ch-ua-form-factors,upgrade-insecure-requests,origin,content-type,user-agent,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,cookie,priority",
 +    .tls_session_ticket = true,
 +    .tls_permute_extensions = true,
 +    .tls_grease = true,
@@ -4929,12 +4929,12 @@ index 0000000000..94b339b7ad
 +    .sig_hash_algs = "mldsa44:mldsa65:mldsa87:ecdsa_secp256r1_sha256:rsa_pss_rsae_sha256:rsa_pkcs1_sha256:ecdsa_secp384r1_sha384:rsa_pss_rsae_sha384:rsa_pkcs1_sha384:rsa_pss_rsae_sha512:rsa_pkcs1_sha512",
 +    .cert_compression = "brotli",
 +    .tls_delegated_credentials = NULL,
-+    .tls_trust_anchors = "11129.9.11,11129.9.7,52580.200109.1.18,11129.9.10,11129.9.8,44947.2.13,44947.2.14,44947.2.1,52580.200109.1.11,11129.9.15,44947.2.20,11129.9.1,11129.9.4,11129.9.12,44947.2.18,44947.2.15,11129.9.13,52580.200109.1.13,52580.200109.1.10,52580.200109.1.12,52580.200109.1.9,11129.9.6,52580.200109.1.7,11129.9.5,44947.2.6,52580.200109.1.19,44947.2.19,52580.200109.1.8",
++    .tls_trust_anchors = "44947.2.1,44947.2.6,44947.2.13,44947.2.14,44947.2.15,44947.2.18,44947.2.19,44947.2.20,52580.200109.1.7,52580.200109.1.8,52580.200109.1.9,52580.200109.1.10,52580.200109.1.11,52580.200109.1.12,52580.200109.1.13,52580.200109.1.18,52580.200109.1.19,11129.9.1,11129.9.4,11129.9.5,11129.9.6,11129.9.7,11129.9.8,11129.9.10,11129.9.11,11129.9.12,11129.9.13,11129.9.15",
 +    .alpn = true,
 +    .alps = true,
 +    .ech = "true",
-+    .http_header_order = "sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-platform,upgrade-insecure-requests,user-agent,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,priority,cookie",
-+    .http3_http_header_order = "sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-platform,upgrade-insecure-requests,user-agent,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,priority,cookie",
++    .http_header_order = "host,connection,content-length,pragma,cache-control,sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,sec-ch-ua-platform-version,sec-ch-ua-model,sec-ch-ua-bitness,sec-ch-ua-wow64,sec-ch-ua-full-version-list,sec-ch-ua-form-factors,upgrade-insecure-requests,origin,content-type,user-agent,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,cookie,priority",
++    .http3_http_header_order = "host,connection,content-length,pragma,cache-control,sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,sec-ch-ua-platform-version,sec-ch-ua-model,sec-ch-ua-bitness,sec-ch-ua-wow64,sec-ch-ua-full-version-list,sec-ch-ua-form-factors,upgrade-insecure-requests,origin,content-type,user-agent,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,cookie,priority",
 +    .tls_session_ticket = true,
 +    .tls_permute_extensions = true,
 +    .tls_grease = true,
@@ -4997,12 +4997,12 @@ index 0000000000..94b339b7ad
 +    .sig_hash_algs = "mldsa44:mldsa65:mldsa87:ecdsa_secp256r1_sha256:rsa_pss_rsae_sha256:rsa_pkcs1_sha256:ecdsa_secp384r1_sha384:rsa_pss_rsae_sha384:rsa_pkcs1_sha384:rsa_pss_rsae_sha512:rsa_pkcs1_sha512",
 +    .cert_compression = "brotli",
 +    .tls_delegated_credentials = NULL,
-+    .tls_trust_anchors = "11129.9.11,11129.9.7,52580.200109.1.18,11129.9.10,11129.9.8,44947.2.13,44947.2.14,44947.2.1,52580.200109.1.11,11129.9.15,44947.2.20,11129.9.1,11129.9.4,11129.9.12,44947.2.18,44947.2.15,11129.9.13,52580.200109.1.13,52580.200109.1.10,52580.200109.1.12,52580.200109.1.9,11129.9.6,52580.200109.1.7,11129.9.5,44947.2.6,52580.200109.1.19,44947.2.19,52580.200109.1.8",
++    .tls_trust_anchors = "44947.2.1,44947.2.6,44947.2.13,44947.2.14,44947.2.15,44947.2.18,44947.2.19,44947.2.20,52580.200109.1.7,52580.200109.1.8,52580.200109.1.9,52580.200109.1.10,52580.200109.1.11,52580.200109.1.12,52580.200109.1.13,52580.200109.1.18,52580.200109.1.19,11129.9.1,11129.9.4,11129.9.5,11129.9.6,11129.9.7,11129.9.8,11129.9.10,11129.9.11,11129.9.12,11129.9.13,11129.9.15",
 +    .alpn = true,
 +    .alps = true,
 +    .ech = "true",
-+    .http_header_order = "sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-platform,upgrade-insecure-requests,user-agent,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,priority,cookie",
-+    .http3_http_header_order = "sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-platform,upgrade-insecure-requests,user-agent,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,priority,cookie",
++    .http_header_order = "host,connection,content-length,pragma,cache-control,sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,sec-ch-ua-platform-version,sec-ch-ua-model,sec-ch-ua-bitness,sec-ch-ua-wow64,sec-ch-ua-full-version-list,sec-ch-ua-form-factors,upgrade-insecure-requests,origin,content-type,user-agent,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,cookie,priority",
++    .http3_http_header_order = "host,connection,content-length,pragma,cache-control,sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,sec-ch-ua-platform-version,sec-ch-ua-model,sec-ch-ua-bitness,sec-ch-ua-wow64,sec-ch-ua-full-version-list,sec-ch-ua-form-factors,upgrade-insecure-requests,origin,content-type,user-agent,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,cookie,priority",
 +    .tls_session_ticket = true,
 +    .tls_permute_extensions = true,
 +    .tls_grease = true,
@@ -5065,12 +5065,12 @@ index 0000000000..94b339b7ad
 +    .sig_hash_algs = "mldsa44:mldsa65:mldsa87:ecdsa_secp256r1_sha256:rsa_pss_rsae_sha256:rsa_pkcs1_sha256:ecdsa_secp384r1_sha384:rsa_pss_rsae_sha384:rsa_pkcs1_sha384:rsa_pss_rsae_sha512:rsa_pkcs1_sha512",
 +    .cert_compression = "brotli",
 +    .tls_delegated_credentials = NULL,
-+    .tls_trust_anchors = "11129.9.11,11129.9.7,52580.200109.1.18,11129.9.10,11129.9.8,44947.2.13,44947.2.14,44947.2.1,52580.200109.1.11,11129.9.15,44947.2.20,11129.9.1,11129.9.4,11129.9.12,44947.2.18,44947.2.15,11129.9.13,52580.200109.1.13,52580.200109.1.10,52580.200109.1.12,52580.200109.1.9,11129.9.6,52580.200109.1.7,11129.9.5,44947.2.6,52580.200109.1.19,44947.2.19,52580.200109.1.8",
++    .tls_trust_anchors = "44947.2.1,44947.2.6,44947.2.13,44947.2.14,44947.2.15,44947.2.18,44947.2.19,44947.2.20,52580.200109.1.7,52580.200109.1.8,52580.200109.1.9,52580.200109.1.10,52580.200109.1.11,52580.200109.1.12,52580.200109.1.13,52580.200109.1.18,52580.200109.1.19,11129.9.1,11129.9.4,11129.9.5,11129.9.6,11129.9.7,11129.9.8,11129.9.10,11129.9.11,11129.9.12,11129.9.13,11129.9.15",
 +    .alpn = true,
 +    .alps = true,
 +    .ech = "true",
-+    .http_header_order = "sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-platform,upgrade-insecure-requests,user-agent,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,priority,cookie",
-+    .http3_http_header_order = "sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-platform,upgrade-insecure-requests,user-agent,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,priority,cookie",
++    .http_header_order = "host,connection,content-length,pragma,cache-control,sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,sec-ch-ua-platform-version,sec-ch-ua-model,sec-ch-ua-bitness,sec-ch-ua-wow64,sec-ch-ua-full-version-list,sec-ch-ua-form-factors,upgrade-insecure-requests,origin,content-type,user-agent,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,cookie,priority",
++    .http3_http_header_order = "host,connection,content-length,pragma,cache-control,sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,sec-ch-ua-platform-version,sec-ch-ua-model,sec-ch-ua-bitness,sec-ch-ua-wow64,sec-ch-ua-full-version-list,sec-ch-ua-form-factors,upgrade-insecure-requests,origin,content-type,user-agent,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,cookie,priority",
 +    .tls_session_ticket = true,
 +    .tls_permute_extensions = true,
 +    .tls_grease = true,
@@ -10245,7 +10245,7 @@ index fbca4b84b8..894adb38c8 100644
    return CURLE_OK;
  }
 diff --git a/lib/vtls/openssl.c b/lib/vtls/openssl.c
-index 7bb7a8c50e..0ed1f9135e 100644
+index 7bb7a8c50e..a38fa5f0e9 100644
 --- a/lib/vtls/openssl.c
 +++ b/lib/vtls/openssl.c
 @@ -37,6 +37,7 @@
@@ -10958,7 +10958,7 @@ index 7bb7a8c50e..0ed1f9135e 100644
  #ifndef OPENSSL_NO_OCSP
    if(Curl_ssl_cf_get_filter_config(cf)->verifystatus)
      SSL_set_tlsext_status_type(octx->ssl, TLSEXT_STATUSTYPE_ocsp);
-@@ -3706,9 +4294,124 @@ static CURLcode ossl_init_method(struct Curl_cfilter *cf,
+@@ -3706,9 +4294,123 @@ static CURLcode ossl_init_method(struct Curl_cfilter *cf,
    return *pmethod ? CURLE_OK : CURLE_SSL_CONNECT_ERROR;
  }
  
@@ -11032,26 +11032,25 @@ index 7bb7a8c50e..0ed1f9135e 100644
 +      offset += encoded[offset] + 1;
 +    }
 +
-+    /* The IDs form a set. Randomize only the temporary wire order, leaving
-+     * the configured value stable for connection and session cache keys. */
-+    for(i = id_count; i > 1; i--) {
-+      size_t random;
-+      size_t threshold = (size_t)(-i) % i;
-+      size_t selected;
-+      size_t swap;
++    /* Sort trust anchor OIDs lexicographically by raw ASN.1 relative OID
++     * bytes (matching Chromium's std::sort in ConfigureTrustAnchors). */
++    for(i = 1; i < id_count; i++) {
++      size_t off_b = offsets[i];
++      size_t len_b = encoded[off_b];
++      const unsigned char *ptr_b = encoded + off_b + 1;
++      size_t j = i;
 +
-+      do {
-+        result = Curl_rand(data, (unsigned char *)&random, sizeof(random));
-+        if(result) {
-+          failf(data, "failed randomizing TLS trust anchor list");
-+          goto out;
-+        }
-+      } while(random < threshold);
-+
-+      selected = random % i;
-+      swap = offsets[i - 1];
-+      offsets[i - 1] = offsets[selected];
-+      offsets[selected] = swap;
++      while(j > 0) {
++        size_t off_a = offsets[j - 1];
++        size_t len_a = encoded[off_a];
++        const unsigned char *ptr_a = encoded + off_a + 1;
++        int cmp = memcmp(ptr_a, ptr_b, len_a < len_b ? len_a : len_b);
++        if(cmp < 0 || (cmp == 0 && len_a <= len_b))
++          break;
++        offsets[j] = off_a;
++        j--;
++      }
++      offsets[j] = off_b;
 +    }
 +
 +    offset = 0;
@@ -11083,7 +11082,7 @@ index 7bb7a8c50e..0ed1f9135e 100644
                              struct ssl_peer *peer,
                              const struct alpn_spec *alpns_requested,
                              Curl_ossl_ctx_setup_cb *cb_setup,
-@@ -3729,6 +4432,9 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
+@@ -3729,6 +4431,9 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
    unsigned int ssl_version_min;
    char error_buffer[256];
  
@@ -11093,7 +11092,7 @@ index 7bb7a8c50e..0ed1f9135e 100644
    /* Make funny stuff to get random input */
    result = ossl_seed(data);
    if(result)
-@@ -3810,7 +4516,15 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
+@@ -3810,7 +4515,15 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
       workarounds. In order to keep the secure workaround, the
       SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS bit must not be set. */
  
@@ -11110,7 +11109,7 @@ index 7bb7a8c50e..0ed1f9135e 100644
  
    /* mitigate CVE-2010-4180 */
    ctx_options &= ~(ctx_option_t)SSL_OP_NETSCAPE_REUSE_CIPHER_CHANGE_BUG;
-@@ -3866,10 +4580,29 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
+@@ -3866,10 +4579,29 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
    /* We do retry writes sometimes from another buffer address */
    SSL_CTX_set_mode(octx->ssl_ctx, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
  
@@ -11140,7 +11139,7 @@ index 7bb7a8c50e..0ed1f9135e 100644
      if(!SSL_CTX_set_cipher_list(octx->ssl_ctx, ciphers)) {
        failf(data, "failed setting cipher list: %s", ciphers);
        return CURLE_SSL_CIPHER;
-@@ -3910,7 +4643,8 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
+@@ -3910,7 +4642,8 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
  #endif
  
    {
@@ -11150,7 +11149,7 @@ index 7bb7a8c50e..0ed1f9135e 100644
      if(curves) {
  #ifdef HAVE_BORINGSSL_LIKE
  #define OSSL_CURVE_CAST(x) (x)
-@@ -3924,10 +4658,12 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
+@@ -3924,10 +4657,12 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
      }
    }
  
@@ -11165,7 +11164,7 @@ index 7bb7a8c50e..0ed1f9135e 100644
      if(signature_algorithms) {
        if(!SSL_CTX_set1_sigalgs_list(octx->ssl_ctx,
                                      OSSL_SIGALG_CAST(signature_algorithms))) {
-@@ -3939,11 +4675,121 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
+@@ -3939,11 +4674,121 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
    }
  #endif
  
@@ -11287,7 +11286,7 @@ index 7bb7a8c50e..0ed1f9135e 100644
  
    /* Enable logging of secrets to the file specified in env SSLKEYLOGFILE. */
  #if !defined(HAVE_KEYLOG_UPSTREAM) && defined(HAVE_KEYLOG_CALLBACK)
-@@ -4045,7 +4891,8 @@ static CURLcode ossl_connect_step1(struct Curl_cfilter *cf,
+@@ -4045,7 +4890,8 @@ static CURLcode ossl_connect_step1(struct Curl_cfilter *cf,
    DEBUGASSERT(octx);
    DEBUGASSERT(connssl->peer.origin);
  
@@ -11297,7 +11296,7 @@ index 7bb7a8c50e..0ed1f9135e 100644
                                connssl->alpn, NULL, NULL,
                                ossl_new_session_cb, cf,
                                ossl_on_session_reuse);
-@@ -4148,6 +4995,40 @@ static int ossl_trace_ech_retry_configs(struct Curl_cfilter *cf,
+@@ -4148,6 +4994,40 @@ static int ossl_trace_ech_retry_configs(struct Curl_cfilter *cf,
    return rv;
  }
  
@@ -11338,7 +11337,7 @@ index 7bb7a8c50e..0ed1f9135e 100644
  #endif
  
  static CURLcode ossl_connect_step2(struct Curl_cfilter *cf,
-@@ -4274,6 +5155,13 @@ static CURLcode ossl_connect_step2(struct Curl_cfilter *cf,
+@@ -4274,6 +5154,13 @@ static CURLcode ossl_connect_step2(struct Curl_cfilter *cf,
          /* trace retry_configs if we got some */
          ossl_trace_ech_retry_configs(cf, data, octx->ssl, reason);
  
@@ -11352,7 +11351,7 @@ index 7bb7a8c50e..0ed1f9135e 100644
          result = CURLE_ECH_REQUIRED;
          failf(data, "ECH: rejected, %s",
                ossl_strerror(errdetail, error_buffer, sizeof(error_buffer)));
-@@ -4281,8 +5169,10 @@ static CURLcode ossl_connect_step2(struct Curl_cfilter *cf,
+@@ -4281,8 +5168,10 @@ static CURLcode ossl_connect_step2(struct Curl_cfilter *cf,
  #endif
        else {
          result = CURLE_SSL_CONNECT_ERROR;
@@ -11365,7 +11364,7 @@ index 7bb7a8c50e..0ed1f9135e 100644
        }
  
        /* detail is already set to the SSL error above */
-@@ -4295,10 +5185,20 @@ static CURLcode ossl_connect_step2(struct Curl_cfilter *cf,
+@@ -4295,10 +5184,20 @@ static CURLcode ossl_connect_step2(struct Curl_cfilter *cf,
          char extramsg[80] = "";
          int sockerr = SOCKERRNO;
  
@@ -11389,7 +11388,7 @@ index 7bb7a8c50e..0ed1f9135e 100644
                connssl->peer.origin->hostname, connssl->peer.origin->port);
        }
  
-@@ -4310,6 +5210,22 @@ static CURLcode ossl_connect_step2(struct Curl_cfilter *cf,
+@@ -4310,6 +5209,22 @@ static CURLcode ossl_connect_step2(struct Curl_cfilter *cf,
      connssl->connecting_state = ssl_connect_3;
      Curl_ossl_report_handshake(data, octx);
  
@@ -11412,7 +11411,7 @@ index 7bb7a8c50e..0ed1f9135e 100644
  #if defined(HAVE_SSL_SET1_ECH_CONFIG_LIST) && !defined(HAVE_BORINGSSL_LIKE)
      if(Curl_ssl_ech_enabled(cf)) {
        struct ssl_filter_config *conn_config =
-@@ -4831,8 +5747,14 @@ CURLcode Curl_ossl_check_peer_cert(struct Curl_cfilter *cf,
+@@ -4831,8 +5746,14 @@ CURLcode Curl_ossl_check_peer_cert(struct Curl_cfilter *cf,
    infof(data, "OpenSSL verify result: %lx", (unsigned long)ossl_verify);
  
    verified = (ossl_verify == X509_V_OK);
@@ -11429,7 +11428,7 @@ index 7bb7a8c50e..0ed1f9135e 100644
  
  #ifdef USE_APPLE_SECTRUST
    if(!verified && conn_config->verifypeer && conn_config->native_ca_store) {
-@@ -5065,6 +5987,16 @@ static CURLcode ossl_connect(struct Curl_cfilter *cf,
+@@ -5065,6 +5986,16 @@ static CURLcode ossl_connect(struct Curl_cfilter *cf,
  
  out:
    if(result == CURLE_AGAIN) {
