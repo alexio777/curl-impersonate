@@ -326,3 +326,35 @@
   - CURL_IMPERSONATE: safari270
   - libcurl-impersonate
   - safari270
+- - curl_chrome156
+  - null
+  - null
+  - chrome156
+- - minicurl
+  - CURL_IMPERSONATE: chrome156
+  - libcurl-impersonate
+  - chrome156
+- - curl_chrome156_macos
+  - null
+  - null
+  - chrome156_macos
+- - minicurl
+  - CURL_IMPERSONATE: chrome156_macos
+  - libcurl-impersonate
+  - chrome156_macos
+- - curl_chrome157
+  - null
+  - null
+  - chrome157
+- - minicurl
+  - CURL_IMPERSONATE: chrome157
+  - libcurl-impersonate
+  - chrome157
+- - curl_chrome157_macos
+  - null
+  - null
+  - chrome157_macos
+- - minicurl
+  - CURL_IMPERSONATE: chrome157_macos
+  - libcurl-impersonate
+  - chrome157_macos
