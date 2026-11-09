@@ -71,6 +71,46 @@
             "wrapper_script": "curl_chrome116"
         },
         {
+            "name": "chrome156",
+            "browser": {
+                "name": "chrome",
+                "version": "156.0.8078.80",
+                "os": "win10"
+            },
+            "binary": "curl-impersonate",
+            "wrapper_script": "curl_chrome156"
+        },
+        {
+            "name": "chrome156_macos",
+            "browser": {
+                "name": "chrome",
+                "version": "156.0.8078.80",
+                "os": "macos26.0"
+            },
+            "binary": "curl-impersonate",
+            "wrapper_script": "curl_chrome156_macos"
+        },
+        {
+            "name": "chrome157",
+            "browser": {
+                "name": "chrome",
+                "version": "157.0.8103.38",
+                "os": "win10"
+            },
+            "binary": "curl-impersonate",
+            "wrapper_script": "curl_chrome157"
+        },
+        {
+            "name": "chrome157_macos",
+            "browser": {
+                "name": "chrome",
+                "version": "157.0.8103.38",
+                "os": "macos26.0"
+            },
+            "binary": "curl-impersonate",
+            "wrapper_script": "curl_chrome157_macos"
+        },
+        {
             "name": "chrome99_android",
             "browser": {
                 "name": "chrome",
