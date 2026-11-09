@@ -390,3 +390,19 @@
   - CURL_IMPERSONATE: samsung30_android
   - libcurl-impersonate
   - samsung30_android
+- - curl_safari272_ios
+  - null
+  - null
+  - safari272_ios
+- - minicurl
+  - CURL_IMPERSONATE: safari272_ios
+  - libcurl-impersonate
+  - safari272_ios
+- - curl_samsung31_android
+  - null
+  - null
+  - samsung31_android
+- - minicurl
+  - CURL_IMPERSONATE: samsung31_android
+  - libcurl-impersonate
+  - samsung31_android

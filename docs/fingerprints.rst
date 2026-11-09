@@ -36,6 +36,7 @@ extended list as an API on `impersonate.pro <https://impersonate.pro>`_. See :do
    "Chrome", "99", "Android 12", "``chrome99_android``", "``curl_chrome99_android``", ""
    "Chrome", "131", "Android 14", "``chrome131_android``", "``curl_chrome131_android``", ""
    "Samsung Internet", "30.0.2.45", "Android 16 (Galaxy S26)", "``samsung30_android``", "``curl_samsung30_android``", ""
+   "Samsung Internet", "30.0.2.45", "Android 16 (Galaxy S26)", "``samsung31_android``", "``curl_samsung31_android``", ""
    "Edge", "99", "Windows 10", "``edge99``", "``curl_edge99``", ""
    "Edge", "101", "Windows 10", "``edge101``", "``curl_edge101``", ""
    "Safari", "15.3", "macOS Big Sur", "``safari153``", "``curl_safari153``", ""
@@ -52,6 +53,7 @@ extended list as an API on `impersonate.pro <https://impersonate.pro>`_. See :do
    "Safari", "27.0", "macOS 27.0", "``safari270``", "``curl_safari270``", "Yes"
    "Safari", "27.0", "iOS 27.0", "``safari270_ios``", "``curl_safari270_ios``", "Yes"
    "Safari", "27.0", "iOS 27 (iPhone 18 Pro)", "``safari27_ios``", "``curl_safari27_ios``", ""
+   "Safari", "27.0", "iOS 27 (iPhone 18 Pro)", "``safari272_ios``", "``curl_safari272_ios``", ""
    "Firefox", "133.0", "macOS Sonoma", "``firefox133``", "``curl_firefox133``", ""
    "Firefox", "135.0", "macOS Sonoma", "``firefox135``", "``curl_firefox135``", ""
    "Firefox", "144.0", "macOS Tahoe", "``firefox144``", "``curl_firefox144``", ""
@@ -83,6 +85,13 @@ Notes:
    ``samsung30_android`` has no HTTP/3 fingerprint. The QUIC/HTTP/3 fields of
    ``safari27_ios`` are carried over from ``safari270_ios`` and are not verified
    against iOS 27.
+6. ``safari272_ios`` = Safari 27.0 / iOS 27 (iPhone 18 Pro),
+   ``samsung31_android`` = Samsung Internet 30.0.2.45 / Android 16 (Galaxy S26):
+   the requested versions (iOS 27.2, Samsung Internet 31.0.0.79) are not offered
+   on BrowserStack as of 2026-11-09, so these targets carry the same captured data
+   as ``safari27_ios`` and ``samsung30_android``. HTTP/3 was not captured (no KVM
+   for an emulator, BrowserStack Local carries TCP only); the QUIC fields of
+   ``safari272_ios`` are taken from ``safari270_ios`` and are not verified.
 
 Selecting HTTP/3
 ----------------

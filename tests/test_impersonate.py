@@ -142,6 +142,7 @@ EXACT_DYNAMIC_PROFILES = [
     "firefox159",
     "firefox159_macos",
     "safari27_ios",
+    "safari272_ios",
 ]
 
 # HTTP/3 was not captured for the WebKit profile (BrowserStack Local

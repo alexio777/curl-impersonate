@@ -133,6 +133,11 @@ def render_preset(profile, target, limit):
     fp = profile["fingerprint"]
     fields = {"target": target, "alias": target}
     lines = ["  {"]
+    comment = profile.get("comment")
+    if comment:
+        if "*/" in comment or "\n" in comment or not comment.isascii():
+            raise ValueError(f"invalid preset comment: {comment!r}")
+        lines.append(f"    /* {comment} */")
 
     def emit(key, value):
         if isinstance(value, list):

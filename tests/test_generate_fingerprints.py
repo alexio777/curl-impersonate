@@ -130,6 +130,21 @@ def test_preset_webkit_fields(profile):
         assert f"    {line}" in preset
 
 
+def test_preset_comment(profile):
+    fp = profile["fingerprint"]
+    fp.update({"http_version": "v2", "tls_version": "1.2"})
+    profile["comment"] = "Example 1.0 on Device X"
+    preset = generator.render_preset(profile, "example", 32)
+    assert preset.splitlines()[1] == "    /* Example 1.0 on Device X */"
+    merged = generator.update_presets(
+        "const struct impersonate_opts impersonations[] = {\n};\n",
+        {"example": preset})
+    assert "/* Example 1.0 on Device X */" in merged
+    profile["comment"] = "bad */ comment"
+    with pytest.raises(ValueError, match="invalid preset comment"):
+        generator.render_preset(profile, "example", 32)
+
+
 def test_partial_tls_matches_capture(profile, tls_capture):
     expected = generator.render_tls_signature(profile["fingerprint"])
     actual = TLSClientHelloSignature.from_dict(tls_capture)
