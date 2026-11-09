@@ -180,6 +180,26 @@
             },
             "binary": "curl-impersonate",
             "wrapper_script": "curl_safari15_5"
+        },
+        {
+            "name": "safari27_ios",
+            "browser": {
+                "name": "safari",
+                "version": "27.0",
+                "os": "ios27"
+            },
+            "binary": "curl-impersonate",
+            "wrapper_script": "curl_safari27_ios"
+        },
+        {
+            "name": "samsung30_android",
+            "browser": {
+                "name": "samsung",
+                "version": "30.0.2.45",
+                "os": "android16"
+            },
+            "binary": "curl-impersonate",
+            "wrapper_script": "curl_samsung30_android"
         }
     ]
 }

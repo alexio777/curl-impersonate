@@ -141,6 +141,13 @@ EXACT_DYNAMIC_PROFILES = [
     "chrome157_macos",
     "firefox159",
     "firefox159_macos",
+    "safari27_ios",
+]
+
+# HTTP/3 was not captured for the WebKit profile (BrowserStack Local
+# carries TCP only): its exact dynamic order is asserted over HTTP/2 only.
+EXACT_DYNAMIC_H3_PROFILES = [
+    p for p in EXACT_DYNAMIC_PROFILES if not p.startswith("safari")
 ]
 
 # Gecko request modes exercised per Firefox profile (Chromium: nav only).
@@ -189,22 +196,51 @@ GECKO_WIRE_HEADER_ORDER = {
     ),
 }
 
+# Safari 27.0 (iPhone 18 Pro, iOS 27) non-pseudo HTTP/2 wire order per
+# request mode, written from the live BrowserStack capture
+# (build/gen/safari-272-ios/NOTES.md): nav = cross-site <form> POST,
+# fetch = cross-site fetch() POST (sec-fetch-site before origin),
+# xhr = same-origin XMLHttpRequest POST with X-Requested-With.
+WEBKIT_WIRE_HEADER_ORDER = {
+    "nav": (
+        "accept", "content-type", "origin", "sec-fetch-site",
+        "sec-fetch-mode", "user-agent", "referer", "sec-fetch-dest",
+        "content-length", "accept-language", "priority", "accept-encoding",
+    ),
+    "fetch": (
+        "accept", "content-type", "sec-fetch-site", "origin",
+        "sec-fetch-mode", "user-agent", "referer", "sec-fetch-dest",
+        "content-length", "accept-language", "priority", "accept-encoding",
+    ),
+    "xhr": (
+        "accept", "content-type", "origin", "sec-fetch-site",
+        "content-length", "sec-fetch-mode", "user-agent", "referer",
+        "sec-fetch-dest", "x-requested-with", "accept-language", "priority",
+        "accept-encoding", "cookie",
+    ),
+}
+
 # Pseudo-header order per engine and protocol (Firefox: capture NOTES.md).
 EXACT_PSEUDO_ORDER = {
     ("chromium", "h2"): (":method", ":authority", ":scheme", ":path"),
     ("chromium", "h3"): (":method", ":authority", ":scheme", ":path"),
     ("gecko", "h2"): (":method", ":path", ":authority", ":scheme"),
     ("gecko", "h3"): (":method", ":scheme", ":authority", ":path"),
+    ("webkit", "h2"): (":method", ":scheme", ":authority", ":path"),
 }
 
 
 def _exact_engine(profile):
-    return "gecko" if profile.startswith("firefox") else "chromium"
+    if profile.startswith("firefox"):
+        return "gecko"
+    if profile.startswith("safari"):
+        return "webkit"
+    return "chromium"
 
 
-def _exact_dynamic_cases():
-    for profile in EXACT_DYNAMIC_PROFILES:
-        if _exact_engine(profile) == "gecko":
+def _exact_dynamic_cases(profiles=EXACT_DYNAMIC_PROFILES):
+    for profile in profiles:
+        if _exact_engine(profile) in ("gecko", "webkit"):
             for mode in GECKO_EXACT_MODES:
                 yield pytest.param(profile, mode, id=f"{profile}-{mode}")
         else:
@@ -212,6 +248,7 @@ def _exact_dynamic_cases():
 
 
 EXACT_DYNAMIC_CASES = list(_exact_dynamic_cases())
+EXACT_DYNAMIC_H3_CASES = list(_exact_dynamic_cases(EXACT_DYNAMIC_H3_PROFILES))
 
 
 @pytest.fixture
@@ -1086,6 +1123,53 @@ def _gecko_exact_inputs(mode):
     return dynamic
 
 
+def _webkit_exact_inputs(mode):
+    """Explicit per-test dynamic values of a WebKit POST (see
+    WEBKIT_WIRE_HEADER_ORDER for the context of each mode)."""
+    dynamic = {
+        # From "-d a=1".
+        "content-length": "3",
+        "content-type": "application/x-www-form-urlencoded",
+    }
+    if mode == "xhr":
+        # Same-origin XHR: Safari sends the cookie and the full referer.
+        dynamic.update({
+            "origin": "https://localhost:8443",
+            "sec-fetch-site": "same-origin",
+            "referer": "https://localhost:8443/page",
+            "cookie": "sid=1",
+            "accept": "*/*",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "priority": "u=3, i",
+            "x-requested-with": "XMLHttpRequest",
+        })
+        return dynamic
+    # Cross-site: no cookie in the capture (SameSite), so none is given.
+    dynamic.update({
+        "origin": "https://example.com",
+        "sec-fetch-site": "cross-site",
+        "referer": "https://example.com/",
+    })
+    if mode == "fetch":
+        dynamic.update({"accept": "*/*", "sec-fetch-dest": "empty",
+                        "sec-fetch-mode": "cors", "priority": "u=3, i"})
+    return dynamic
+
+
+def _webkit_exact_curl_args(mode, dynamic):
+    """WebKit POST arguments in an order unlike the wire order."""
+    args = []
+    if "cookie" in dynamic:
+        args += ["-b", dynamic["cookie"]]
+    args += ["-d", "a=1", "-e", dynamic["referer"]]
+    if mode == "fetch":
+        args += ["-H", "Sec-Fetch-Mode: cors"]
+    if mode == "xhr":
+        args += ["-H", f"X-Requested-With: {dynamic['x-requested-with']}"]
+    return args
+
+
 def _expected_exact_dynamic_headers(
     browser_signatures, profile, mode="nav", h3_authority=None
 ):
@@ -1113,6 +1197,11 @@ def _expected_exact_dynamic_headers(
         if h3_authority:
             values["alt-used"] = h3_authority
         order = GECKO_WIRE_HEADER_ORDER[(mode, "h3" if h3_authority else "h2")]
+    elif _exact_engine(profile) == "webkit":
+        assert not h3_authority, "WebKit H3 order was not captured"
+        dynamic = _webkit_exact_inputs(mode)
+        values = {**base_headers, **dynamic}
+        order = WEBKIT_WIRE_HEADER_ORDER[mode]
     else:
         dynamic = _exact_dynamic_inputs(profile, base_headers)
         values = {**base_headers, **dynamic}
@@ -1139,6 +1228,8 @@ def _exact_dynamic_curl_args(dynamic, profile, mode):
     """POST arguments in deliberately scrambled (non-canonical) order."""
     if _exact_engine(profile) == "gecko":
         return _gecko_exact_curl_args(mode, dynamic)
+    if _exact_engine(profile) == "webkit":
+        return _webkit_exact_curl_args(mode, dynamic)
 
     def header(name):
         return ["-H", f"{name}: {dynamic[name]}"]
@@ -1280,7 +1371,7 @@ async def test_exact_dynamic_header_order_http2(
     assert actual == expected
 
 
-@pytest.mark.parametrize("profile,mode", EXACT_DYNAMIC_CASES)
+@pytest.mark.parametrize("profile,mode", EXACT_DYNAMIC_H3_CASES)
 def test_exact_dynamic_header_order_http3(
     pytestconfig, browser_signatures, profile, mode
 ):

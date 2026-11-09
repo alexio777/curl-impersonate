@@ -374,3 +374,19 @@
   - CURL_IMPERSONATE: firefox159_macos
   - libcurl-impersonate
   - firefox159_macos
+- - curl_safari27_ios
+  - null
+  - null
+  - safari27_ios
+- - minicurl
+  - CURL_IMPERSONATE: safari27_ios
+  - libcurl-impersonate
+  - safari27_ios
+- - curl_samsung30_android
+  - null
+  - null
+  - samsung30_android
+- - minicurl
+  - CURL_IMPERSONATE: samsung30_android
+  - libcurl-impersonate
+  - samsung30_android

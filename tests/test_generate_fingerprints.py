@@ -112,6 +112,24 @@ def test_preset_engine_fields(profile):
         assert f"    {line}" in preset
 
 
+def test_preset_webkit_fields(profile):
+    fp = profile["fingerprint"]
+    fp.update({
+        "http_version": "v2", "tls_version": "1.2", "header_engine": "webkit",
+        "http2_no_priority": True, "tls_trust_anchors": [],
+        # Safari offers rsa_pss_rsae_sha384 twice; keep it verbatim.
+        "tls_signature_hashes": ["rsa_pss_rsae_sha384", "rsa_pss_rsae_sha384",
+                                 "rsa_pkcs1_sha1"],
+    })
+    preset = generator.render_preset(profile, "example", 32)
+    for line in (
+        '.header_engine = "webkit",', ".http2_no_priority = true,",
+        ".tls_trust_anchors = NULL,",
+        '.sig_hash_algs = "rsa_pss_rsae_sha384:rsa_pss_rsae_sha384:rsa_pkcs1_sha1",',
+    ):
+        assert f"    {line}" in preset
+
+
 def test_partial_tls_matches_capture(profile, tls_capture):
     expected = generator.render_tls_signature(profile["fingerprint"])
     actual = TLSClientHelloSignature.from_dict(tls_capture)

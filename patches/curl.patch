@@ -915,7 +915,7 @@ index 0000000000..ecaa58a00e
 +git df curl-8_23_0 -- . ':(exclude)tests/**' > chrome.patch
 +mv chrome.patch ../curl-impersonate/patches/curl.patch
 diff --git a/include/curl/curl.h b/include/curl/curl.h
-index ccc9a09ac8..5809922321 100644
+index ccc9a09ac8..08d2c036ab 100644
 --- a/include/curl/curl.h
 +++ b/include/curl/curl.h
 @@ -187,6 +187,10 @@ typedef enum {
@@ -1106,8 +1106,8 @@ index ccc9a09ac8..5809922321 100644
 +   * randomized distribution; non-negative values select a fixed number. */
 +  CURLOPT(CURLOPT_QUIC_INITIAL_PACKET_NUMBER, CURLOPTTYPE_LONG, 1041),
 +
-+  /* curl-impersonate: Browser header engine, "chromium" or "gecko".
-+   * NULL keeps the legacy behavior (Chromium detected by sec-ch-ua). */
++  /* curl-impersonate: Browser header engine, "chromium", "gecko" or
++   * "webkit". NULL keeps the legacy behavior (Chromium detected by sec-ch-ua). */
 +  CURLOPT(CURLOPT_HEADER_ENGINE, CURLOPTTYPE_STRINGPOINT, 1042),
 +
 +  /* curl-impersonate: HTTP/2 stream id used for the first request
@@ -2515,7 +2515,7 @@ index f5efe4185c..0b7ccc509f 100644
  
  #endif /* HEADER_CURL_GETINFO_H */
 diff --git a/lib/http.c b/lib/http.c
-index 016e42c3bd..dd16389e7c 100644
+index 016e42c3bd..0e5f3bc689 100644
 --- a/lib/http.c
 +++ b/lib/http.c
 @@ -48,6 +48,7 @@
@@ -2538,7 +2538,7 @@ index 016e42c3bd..dd16389e7c 100644
  void Curl_http_neg_init(struct Curl_easy *data, struct http_negotiation *neg)
  {
    memset(neg, 0, sizeof(*neg));
-@@ -1380,6 +1382,93 @@ static bool follow_switch_get(struct Curl_easy *data)
+@@ -1380,6 +1382,94 @@ static bool follow_switch_get(struct Curl_easy *data)
    return FALSE;
  }
  
@@ -2547,6 +2547,7 @@ index 016e42c3bd..dd16389e7c 100644
 +                                             struct curl_slist *base_headers);
 +static bool http_is_chromium_subresource(struct Curl_easy *data);
 +static bool http_is_gecko(struct Curl_easy *data);
++static bool http_is_webkit(struct Curl_easy *data);
 +static char *http_format_origin_header(CURLU *u);
 +static bool http_is_browser_ordered_profile(struct Curl_easy *data,
 +                                            struct curl_slist *base_headers);
@@ -2632,7 +2633,7 @@ index 016e42c3bd..dd16389e7c 100644
  CURLcode Curl_http_follow(struct Curl_easy *data, const char *newurl,
                            followtype type)
  {
-@@ -1393,6 +1482,28 @@ CURLcode Curl_http_follow(struct Curl_easy *data, const char *newurl,
+@@ -1393,6 +1483,28 @@ CURLcode Curl_http_follow(struct Curl_easy *data, const char *newurl,
  
    DEBUGASSERT(type != FOLLOW_NONE);
  
@@ -2661,7 +2662,7 @@ index 016e42c3bd..dd16389e7c 100644
    if(type != FOLLOW_FAKE)
      data->state.requests++; /* count all real follows */
    if(type == FOLLOW_REDIR) {
-@@ -1431,6 +1542,91 @@ CURLcode Curl_http_follow(struct Curl_easy *data, const char *newurl,
+@@ -1431,6 +1543,92 @@ CURLcode Curl_http_follow(struct Curl_easy *data, const char *newurl,
    if(type == FOLLOW_FAKE)
      return follow_fake(data, follow_url, uc, reachedmax);
  
@@ -2672,6 +2673,7 @@ index 016e42c3bd..dd16389e7c 100644
 +      http_parse_url_slice(old_url, strlen(old_url)) : NULL;
 +    bool is_subresource = http_is_chromium_subresource(data);
 +    bool is_gecko = http_is_gecko(data);
++    bool is_webkit = http_is_webkit(data);
 +    bool is_post = (data->state.httpreq == HTTPREQ_POST ||
 +                    data->state.httpreq == HTTPREQ_POST_FORM ||
 +                    data->state.httpreq == HTTPREQ_POST_MIME);
@@ -2709,17 +2711,17 @@ index 016e42c3bd..dd16389e7c 100644
 +      }
 +    }
 +
-+    if(data->state.chromium_redirect_sfs != 0 && old_u && data->state.uh) {
-+      uint8_t hop_sfs =
-+        http_compute_sfs_between_curlus(old_u, data->state.uh);
-+      if(hop_sfs > data->state.chromium_redirect_sfs)
-+        data->state.chromium_redirect_sfs = hop_sfs;
-+    }
++    data->state.redirect_hop_sfs = (old_u && data->state.uh) ?
++      http_compute_sfs_between_curlus(old_u, data->state.uh) : 0;
++    if(data->state.chromium_redirect_sfs != 0 &&
++       data->state.redirect_hop_sfs > data->state.chromium_redirect_sfs)
++      data->state.chromium_redirect_sfs = data->state.redirect_hop_sfs;
 +
 +    if(!data->set.http_auto_referer && data->state.chromium_initial_referer)
 +      http_update_chromium_redirect_referer(data, old_u, data->state.uh);
 +
-+    if(is_post && !is_subresource && !is_gecko)
++    /* WebKit and Gecko do not revalidate a redirected navigation POST */
++    if(is_post && !is_subresource && !is_gecko && !is_webkit)
 +      data->state.chromium_nav_post_cache_validate = TRUE;
 +
 +    if(data->info.httpcode != 301 &&
@@ -2753,7 +2755,7 @@ index 016e42c3bd..dd16389e7c 100644
    if(disallowport)
      data->state.allow_port = FALSE;
  
-@@ -1805,6 +2001,17 @@ static const char *get_http_string(int httpversion)
+@@ -1805,6 +2003,17 @@ static const char *get_http_string(int httpversion)
    }
  }
  
@@ -2771,7 +2773,7 @@ index 016e42c3bd..dd16389e7c 100644
  CURLcode Curl_add_custom_headers(struct Curl_easy *data,
                                   bool is_connect, int httpversion,
                                   struct dynbuf *req)
-@@ -1814,6 +2021,12 @@ CURLcode Curl_add_custom_headers(struct Curl_easy *data,
+@@ -1814,6 +2023,12 @@ CURLcode Curl_add_custom_headers(struct Curl_easy *data,
    int numlists = 1; /* by default */
    int i;
  
@@ -2784,7 +2786,7 @@ index 016e42c3bd..dd16389e7c 100644
  #ifndef CURL_DISABLE_PROXY
    enum Curl_proxy_use proxy;
  
-@@ -1824,10 +2037,11 @@ CURLcode Curl_add_custom_headers(struct Curl_easy *data,
+@@ -1824,10 +2039,11 @@ CURLcode Curl_add_custom_headers(struct Curl_easy *data,
  
    switch(proxy) {
    case HEADER_SERVER:
@@ -2798,7 +2800,7 @@ index 016e42c3bd..dd16389e7c 100644
      if(data->set.sep_headers) {
        h[1] = data->set.proxyheaders;
        numlists++;
-@@ -1837,7 +2051,7 @@ CURLcode Curl_add_custom_headers(struct Curl_easy *data,
+@@ -1837,7 +2053,7 @@ CURLcode Curl_add_custom_headers(struct Curl_easy *data,
      if(data->set.sep_headers)
        h[0] = data->set.proxyheaders;
      else
@@ -2807,7 +2809,7 @@ index 016e42c3bd..dd16389e7c 100644
      break;
    case HEADER_CONNECT_UDP:
      if(data->set.sep_headers)
-@@ -1848,7 +2062,7 @@ CURLcode Curl_add_custom_headers(struct Curl_easy *data,
+@@ -1848,7 +2064,7 @@ CURLcode Curl_add_custom_headers(struct Curl_easy *data,
    }
  #else
    (void)is_connect;
@@ -2816,16 +2818,16 @@ index 016e42c3bd..dd16389e7c 100644
  #endif
  
    /* loop through one or two lists */
-@@ -1915,6 +2129,22 @@ CURLcode Curl_add_custom_headers(struct Curl_easy *data,
+@@ -1915,6 +2131,22 @@ CURLcode Curl_add_custom_headers(struct Curl_easy *data,
        else if(curlx_str_casecompare(&name, "Connection"))
          /* Connection headers are handled specially */
          ;
-+      /* curl-impersonate: Gecko drops the request body headers and Origin
-+         when a 301/302/303 switches a POST to GET. */
++      /* curl-impersonate: Gecko and WebKit drop the request body headers
++         and Origin when a 301/302/303 switches a POST to GET. */
 +      else if((data->state.followlocation > 0) &&
 +              (data->state.httpreq == HTTPREQ_GET) &&
 +              (data->set.method != HTTPREQ_GET) &&
-+              http_is_gecko(data) &&
++              (http_is_gecko(data) || http_is_webkit(data)) &&
 +              (curlx_str_casecompare(&name, "Content-Type") ||
 +               curlx_str_casecompare(&name, "Content-Length") ||
 +               curlx_str_casecompare(&name, "Origin")))
@@ -2839,16 +2841,76 @@ index 016e42c3bd..dd16389e7c 100644
        else if((httpversion >= 20) &&
                curlx_str_casecompare(&name, "Transfer-Encoding"))
          /* HTTP/2 does not support chunked requests */
-@@ -2067,6 +2297,1083 @@ void Curl_http_method(struct Curl_easy *data,
-   *reqp = httpreq;
+@@ -2020,53 +2252,1230 @@ CURLcode Curl_add_timecondition(struct Curl_easy *data,
  }
+ #endif
  
+-void Curl_http_method(struct Curl_easy *data,
+-                      const char **method, Curl_HttpReq *reqp)
+-{
+-  Curl_HttpReq httpreq = (Curl_HttpReq)data->state.httpreq;
+-  const char *request;
+-#ifndef CURL_DISABLE_WEBSOCKETS
+-  if(data->conn->scheme->protocol & (CURLPROTO_WS | CURLPROTO_WSS))
+-    httpreq = HTTPREQ_GET;
+-  else
+-#endif
+-  if((data->conn->scheme->protocol & (PROTO_FAMILY_HTTP | CURLPROTO_FTP)) &&
+-     data->state.upload)
+-    httpreq = HTTPREQ_PUT;
++void Curl_http_method(struct Curl_easy *data,
++                      const char **method, Curl_HttpReq *reqp)
++{
++  Curl_HttpReq httpreq = (Curl_HttpReq)data->state.httpreq;
++  const char *request;
++#ifndef CURL_DISABLE_WEBSOCKETS
++  if(data->conn->scheme->protocol & (CURLPROTO_WS | CURLPROTO_WSS))
++    httpreq = HTTPREQ_GET;
++  else
++#endif
++  if((data->conn->scheme->protocol & (PROTO_FAMILY_HTTP | CURLPROTO_FTP)) &&
++     data->state.upload)
++    httpreq = HTTPREQ_PUT;
++
++  /* Now set the 'request' pointer to the proper request string */
++  if(!data->state.http_ignorecustom &&
++     CURL_EASY_STR(data, STRING_CUSTOMREQUEST)) {
++    request = CURL_EASY_STR(data, STRING_CUSTOMREQUEST);
++  }
++  else {
++    if(data->req.no_body)
++      request = "HEAD";
++    else {
++      DEBUGASSERT((httpreq >= HTTPREQ_GET) && (httpreq <= HTTPREQ_HEAD));
++      switch(httpreq) {
++      case HTTPREQ_POST:
++      case HTTPREQ_POST_FORM:
++      case HTTPREQ_POST_MIME:
++        request = "POST";
++        break;
++      case HTTPREQ_PUT:
++        request = "PUT";
++        break;
++      default: /* this should never happen */
++      case HTTPREQ_GET:
++        request = "GET";
++        break;
++      case HTTPREQ_HEAD:
++        request = "HEAD";
++        break;
++      }
++    }
++  }
++  *method = request;
++  *reqp = httpreq;
++}
++
 +static const char CHROMIUM_SUBRESOURCE_CUSTOM_ACCEPT_ORDER[] =
 +  "host,connection,content-length,pragma,cache-control,"
 +  "sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,"
 +  "sec-ch-ua-platform-version,sec-ch-ua-model,sec-ch-ua-bitness,"
 +  "sec-ch-ua-wow64,sec-ch-ua-full-version-list,sec-ch-ua-form-factors,"
-+  "sec-ch-prefers-color-scheme,rtt,downlink,ect,"
++  "sec-ch-prefers-color-scheme,rtt,downlink,ect,x-requested-with,"
 +  "user-agent,accept,sec-ch-ua,content-type,sec-ch-ua-mobile,"
 +  "origin,sec-fetch-site,sec-fetch-mode,sec-fetch-dest,referer,"
 +  "accept-encoding,accept-language,cookie,priority";
@@ -2858,7 +2920,7 @@ index 016e42c3bd..dd16389e7c 100644
 +  "sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,"
 +  "sec-ch-ua-platform-version,sec-ch-ua-model,sec-ch-ua-bitness,"
 +  "sec-ch-ua-wow64,sec-ch-ua-full-version-list,sec-ch-ua-form-factors,"
-+  "sec-ch-prefers-color-scheme,rtt,downlink,ect,"
++  "sec-ch-prefers-color-scheme,rtt,downlink,ect,x-requested-with,"
 +  "user-agent,sec-ch-ua,content-type,sec-ch-ua-mobile,accept,"
 +  "origin,sec-fetch-site,sec-fetch-mode,sec-fetch-dest,referer,"
 +  "accept-encoding,accept-language,cookie,priority";
@@ -2866,6 +2928,19 @@ index 016e42c3bd..dd16389e7c 100644
 +static const char CHROMIUM_NAV_REDIRECT_HEADER_ORDER[] =
 +  "host,connection,content-length,pragma,cache-control,"
 +  "upgrade-insecure-requests,content-type,user-agent,origin,accept,"
++  "sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,"
++  "rtt,downlink,ect,sec-ch-ua,sec-ch-ua-mobile,"
++  "sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,"
++  "sec-ch-ua-platform-version,sec-ch-ua-model,sec-ch-ua-bitness,"
++  "sec-ch-ua-wow64,sec-ch-ua-full-version-list,sec-ch-ua-form-factors,"
++  "sec-ch-prefers-color-scheme,"
++  "referer,accept-encoding,accept-language,cookie,priority";
++
++/* Chromium 143 (Samsung Internet 30) sends Origin and Content-Type before
++ * Upgrade-Insecure-Requests; its preset order says so. */
++static const char CHROMIUM143_NAV_REDIRECT_HEADER_ORDER[] =
++  "host,connection,content-length,pragma,cache-control,"
++  "origin,content-type,upgrade-insecure-requests,user-agent,accept,"
 +  "sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,"
 +  "rtt,downlink,ect,sec-ch-ua,sec-ch-ua-mobile,"
 +  "sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,"
@@ -2932,6 +3007,61 @@ index 016e42c3bd..dd16389e7c 100644
 +    "content-type,content-length,referer,origin,alt-used,cookie,"
 +    "upgrade-insecure-requests,sec-fetch-dest,sec-fetch-mode,"
 +    "sec-fetch-site,sec-fetch-user,priority" },
++};
++
++/*
++ * curl-impersonate: WebKit (Safari 27 on iOS) non-pseudo header orders, from
++ * a live HTTP/2 capture. "*" and absent headers as for Gecko. The order is
++ * the same for HTTP/1.1 (not captured) and depends on the request kind and,
++ * for a followed redirect, on whether the last hop crossed sites (_X).
++ */
++enum webkit_mode {
++  WEBKIT_GET,      /* navigation GET, same-origin fetch()/XHR GET */
++  WEBKIT_RELOAD,   /* navigation GET revalidating (Cache-Control) */
++  WEBKIT_BODY,     /* navigation form or same-origin fetch() with a body */
++  WEBKIT_CORS,     /* cross-origin fetch(), any method */
++  WEBKIT_XHR,      /* XMLHttpRequest with a body (X-Requested-With) */
++  WEBKIT_FOLLOW,   /* redirected navigation switched to (or kept) GET */
++  WEBKIT_FOLLOW_X, /* the same, the last hop crossed sites */
++  WEBKIT_REPLAY,   /* navigation body replayed by a 307/308 */
++  WEBKIT_REPLAY_X, /* the same, the last hop crossed sites */
++  WEBKIT_MODE_LAST
++};
++
++static const char * const webkit_header_order[WEBKIT_MODE_LAST] = {
++  /* WEBKIT_GET */
++  "host,connection,sec-fetch-dest,user-agent,accept,referer,sec-fetch-site,"
++  "sec-fetch-mode,*,accept-language,priority,accept-encoding,cookie",
++  /* WEBKIT_RELOAD */
++  "host,connection,accept,sec-fetch-site,sec-fetch-mode,user-agent,referer,"
++  "sec-fetch-dest,cache-control,*,accept-language,priority,accept-encoding,"
++  "cookie",
++  /* WEBKIT_BODY */
++  "host,connection,accept,content-type,origin,sec-fetch-site,sec-fetch-mode,"
++  "user-agent,referer,sec-fetch-dest,*,content-length,accept-language,"
++  "priority,accept-encoding,cookie",
++  /* WEBKIT_CORS */
++  "host,connection,accept,content-type,sec-fetch-site,origin,sec-fetch-mode,"
++  "user-agent,referer,sec-fetch-dest,*,content-length,accept-language,"
++  "priority,accept-encoding,cookie",
++  /* WEBKIT_XHR */
++  "host,connection,accept,content-type,origin,sec-fetch-site,content-length,"
++  "sec-fetch-mode,user-agent,referer,sec-fetch-dest,x-requested-with,*,"
++  "accept-language,priority,accept-encoding,cookie",
++  /* WEBKIT_FOLLOW */
++  "host,connection,accept,sec-fetch-site,priority,sec-fetch-mode,user-agent,"
++  "accept-language,sec-fetch-dest,referer,*,accept-encoding,cookie",
++  /* WEBKIT_FOLLOW_X */
++  "host,connection,accept,sec-fetch-site,priority,sec-fetch-mode,user-agent,"
++  "accept-language,referer,sec-fetch-dest,*,accept-encoding,cookie",
++  /* WEBKIT_REPLAY */
++  "host,connection,accept,content-type,sec-fetch-site,origin,user-agent,"
++  "priority,sec-fetch-mode,accept-language,content-length,sec-fetch-dest,"
++  "referer,*,accept-encoding,cookie",
++  /* WEBKIT_REPLAY_X */
++  "host,connection,accept,content-type,sec-fetch-site,origin,referer,"
++  "priority,sec-fetch-mode,accept-language,user-agent,content-length,"
++  "sec-fetch-dest,*,accept-encoding,cookie",
 +};
 +
 +#define CHROMIUM_CH_FULL_VERSION         (1u << 0)
@@ -3026,6 +3156,19 @@ index 016e42c3bd..dd16389e7c 100644
 +  return engine && curl_strequal(engine, "gecko");
 +}
 +
++static bool http_is_webkit(struct Curl_easy *data)
++{
++  const char *engine = CURL_EASY_STR(data, STRING_HEADER_ENGINE);
++  return engine && curl_strequal(engine, "webkit");
++}
++
++/* An explicit "chromium" engine (newer presets) rather than detection. */
++static bool http_is_explicit_chromium(struct Curl_easy *data)
++{
++  const char *engine = CURL_EASY_STR(data, STRING_HEADER_ENGINE);
++  return engine && curl_strequal(engine, "chromium");
++}
++
 +static bool http_is_chromium_ordered_profile(struct Curl_easy *data,
 +                                             struct curl_slist *base_headers)
 +{
@@ -3046,13 +3189,13 @@ index 016e42c3bd..dd16389e7c 100644
 +  return FALSE;
 +}
 +
-+/* A browser engine (Chromium or Gecko) drives request modes, Sec-Fetch-*,
-+ * the Referer policy and redirect handling. Client hints stay Chromium
-+ * only. */
++/* A browser engine (Chromium, Gecko or WebKit) drives request modes,
++ * Sec-Fetch-*, the Referer policy and redirect handling. Client hints stay
++ * Chromium only. */
 +static bool http_is_browser_ordered_profile(struct Curl_easy *data,
 +                                            struct curl_slist *base_headers)
 +{
-+  if(http_is_gecko(data))
++  if(http_is_gecko(data) || http_is_webkit(data))
 +    return base_headers != NULL;
 +  return http_is_chromium_ordered_profile(data, base_headers);
 +}
@@ -3072,6 +3215,18 @@ index 016e42c3bd..dd16389e7c 100644
 +     http_slist_find_header(data->set.headers,
 +                            STRCONST("User-Agent"), NULL))
 +    return FALSE;
++
++  /* The synthesized high-entropy values are Google Chrome desktop ones: an
++   * explicit chromium preset of another brand (Samsung Internet) does not
++   * get them. */
++  if(http_is_explicit_chromium(data)) {
++    struct Curl_str brand;
++    if(!http_slist_find_header(http_active_base_headers(data),
++                               STRCONST("sec-ch-ua"), &brand) ||
++       !memmem(curlx_str(&brand), curlx_strlen(&brand),
++               STRCONST("\"Google Chrome\"")))
++      return FALSE;
++  }
 +
 +  return TRUE;
 +}
@@ -3610,6 +3765,7 @@ index 016e42c3bd..dd16389e7c 100644
 +  char *uagent;
 +  bool is_chromium = FALSE;
 +  bool is_gecko = FALSE;
++  bool is_webkit = FALSE;
 +  bool is_browser = FALSE;
 +  bool is_xhr = FALSE;
 +  bool is_h3 = FALSE;
@@ -3625,7 +3781,8 @@ index 016e42c3bd..dd16389e7c 100644
 +
 +  is_chromium = http_is_chromium_ordered_profile(data, base_headers);
 +  is_gecko = http_is_gecko(data);
-+  is_browser = is_chromium || is_gecko;
++  is_webkit = http_is_webkit(data);
++  is_browser = is_chromium || is_gecko || is_webkit;
 +  is_h3 = data->conn && (Curl_conn_http_version(data, data->conn) == 30);
 +  if(is_browser) {
 +    is_subresource = http_is_chromium_subresource(data);
@@ -3635,6 +3792,10 @@ index 016e42c3bd..dd16389e7c 100644
 +    if(is_gecko)
 +      /* Firefox 159: weight 42 for navigations, 22 for fetch/XHR */
 +      data->state.engine_weight = is_subresource ? 22 : 42;
++    else if(is_chromium && http_is_explicit_chromium(data))
++      /* Chromium 143: weight 256 for navigations, 220 for fetch/XHR */
++      data->state.engine_weight = is_subresource ? 220 : 256;
++    /* WebKit sends no HTTP/2 priority (preset http2_no_priority) */
 +    if(data->conn && data->conn->scheme)
 +      Curl_http_method(data, &method, &httpreq);
 +    ref_u = http_get_referer_url(data);
@@ -3816,8 +3977,9 @@ index 016e42c3bd..dd16389e7c 100644
 +      else if(is_subresource &&
 +              prefix_len == strlen("priority") &&
 +              curl_strnequal(head->data, "priority", prefix_len)) {
-+        new_list = curl_slist_append(new_list, is_gecko ?
-+                                     "priority: u=4" : "priority: u=1, i");
++        new_list = curl_slist_append(new_list, is_gecko ? "priority: u=4" :
++                                     is_webkit ? "priority: u=3, i" :
++                                     "priority: u=1, i");
 +        found = TRUE;
 +      }
 +    }
@@ -3831,7 +3993,11 @@ index 016e42c3bd..dd16389e7c 100644
 +      goto fail;
 +    }
 +  }
-+
+ 
+-  /* Now set the 'request' pointer to the proper request string */
+-  if(!data->state.http_ignorecustom &&
+-     CURL_EASY_STR(data, STRING_CUSTOMREQUEST)) {
+-    request = CURL_EASY_STR(data, STRING_CUSTOMREQUEST);
 +  /* Now go over any additional application-supplied headers. */
 +  for(head = dup; head; head = head->next) {
 +    if(head->data) {
@@ -3841,7 +4007,28 @@ index 016e42c3bd..dd16389e7c 100644
 +        goto fail;
 +      }
 +    }
-+  }
+   }
+-  else {
+-    if(data->req.no_body)
+-      request = "HEAD";
+-    else {
+-      DEBUGASSERT((httpreq >= HTTPREQ_GET) && (httpreq <= HTTPREQ_HEAD));
+-      switch(httpreq) {
+-      case HTTPREQ_POST:
+-      case HTTPREQ_POST_FORM:
+-      case HTTPREQ_POST_MIME:
+-        request = "POST";
+-        break;
+-      case HTTPREQ_PUT:
+-        request = "PUT";
+-        break;
+-      default: /* this should never happen */
+-      case HTTPREQ_GET:
+-        request = "GET";
+-        break;
+-      case HTTPREQ_HEAD:
+-        request = "HEAD";
+-        break;
 +
 +  if(is_chromium && http_chromium_accept_ch_enabled(data)) {
 +    uint32_t ch_mask = data->state.chromium_accept_ch_mask |
@@ -3866,7 +4053,7 @@ index 016e42c3bd..dd16389e7c 100644
 +      goto fail;
 +    }
 +  }
-+  else if(is_chromium &&
++  else if((is_chromium || is_webkit) &&
 +     !http_slist_find_header(data->set.headers, STRCONST("Origin"), NULL)) {
 +    struct Curl_str mode_val;
 +    bool is_cors = is_subresource;
@@ -3898,9 +4085,11 @@ index 016e42c3bd..dd16389e7c 100644
 +          }
 +          new_list = tmp;
 +        }
-+      }
-+    }
-+  }
+       }
+     }
+   }
+-  *method = request;
+-  *reqp = httpreq;
 +
 +  if(ref_u)
 +    curl_url_cleanup(ref_u);
@@ -3917,13 +4106,13 @@ index 016e42c3bd..dd16389e7c 100644
 +  curl_slist_free_all(dup);
 +  curl_slist_free_all(new_list);
 +  return ret;
-+}
-+
+ }
+ 
 +
  static CURLcode http_set_aptr_host(struct Curl_easy *data)
  {
    struct connectdata *conn = data->conn;
-@@ -2117,9 +3424,9 @@ static CURLcode http_set_aptr_host(struct Curl_easy *data)
+@@ -2117,9 +3526,9 @@ static CURLcode http_set_aptr_host(struct Curl_easy *data)
  #endif
  
      if(!curl_strequal("Host:", ptr)) {
@@ -3936,7 +4125,7 @@ index 016e42c3bd..dd16389e7c 100644
      }
    }
    else {
-@@ -2511,6 +3818,302 @@ static CURLcode addexpect(struct Curl_easy *data, struct dynbuf *r,
+@@ -2511,6 +3920,364 @@ static CURLcode addexpect(struct Curl_easy *data, struct dynbuf *r,
    return CURLE_OK;
  }
  
@@ -4110,6 +4299,60 @@ index 016e42c3bd..dd16389e7c 100644
 +  }
 +}
 +
++/* curl-impersonate: pick the WebKit header order of this request. */
++static enum webkit_mode http_webkit_mode(struct Curl_easy *data)
++{
++  bool has_body = (data->state.httpreq != HTTPREQ_GET) &&
++                  (data->state.httpreq != HTTPREQ_HEAD);
++  bool cross_hop = (data->state.redirect_hop_sfs == 3); /* cross-site */
++
++  if(http_is_chromium_subresource(data)) {
++    CURLU *ref_u = http_get_referer_url(data);
++    bool cross_origin = ref_u && data->state.uh &&
++                        !Curl_url_same_origin(ref_u, data->state.uh);
++    curl_url_cleanup(ref_u);
++    if(cross_origin)
++      return WEBKIT_CORS;
++    if(!has_body)
++      return WEBKIT_GET;
++    return http_slist_find_header(data->set.headers,
++                                  STRCONST("X-Requested-With"), NULL) ?
++      WEBKIT_XHR : WEBKIT_BODY;
++  }
++  if(data->state.followlocation > 0) {
++    if(has_body)
++      return cross_hop ? WEBKIT_REPLAY_X : WEBKIT_REPLAY;
++    return cross_hop ? WEBKIT_FOLLOW_X : WEBKIT_FOLLOW;
++  }
++  if(has_body)
++    return WEBKIT_BODY;
++  return http_slist_find_header(data->set.headers,
++                                STRCONST("Cache-Control"), NULL) ?
++    WEBKIT_RELOAD : WEBKIT_GET;
++}
++
++/* TRUE when the comma separated order lists "origin" before
++ * "upgrade-insecure-requests" (the Chromium 143 navigation layout). */
++static bool http_order_origin_first(const char *order)
++{
++  const char *p = order;
++
++  while(p && *p) {
++    const char *name;
++    size_t namelen;
++
++    http_header_order_token(&p, &name, &namelen);
++    if((namelen == 6) && curl_strnequal(name, "origin", 6))
++      return TRUE;
++    if((namelen == 25) &&
++       curl_strnequal(name, "upgrade-insecure-requests", 25))
++      return FALSE;
++    if(*p == ',')
++      p++;
++  }
++  return FALSE;
++}
++
 +static CURLcode http_req_apply_header_order(struct Curl_easy *data,
 +                                            struct dynbuf *r)
 +{
@@ -4146,6 +4389,11 @@ index 016e42c3bd..dd16389e7c 100644
 +      mode = GECKO_REPLAY;
 +    order = gecko_header_order[mode][h3 ? 1 : 0];
 +  }
++  else if(http_is_webkit(data) && http_active_base_headers(data) &&
++          !(data->conn &&
++            (Curl_conn_http_version(data, data->conn) == 30)))
++    /* HTTP/3 was not captured: it keeps the preset order */
++    order = webkit_header_order[http_webkit_mode(data)];
 +  else if(http_is_chromium_ordered_profile(data,
 +                                           http_active_base_headers(data)) &&
 +          http_is_chromium_subresource(data)) {
@@ -4157,9 +4405,12 @@ index 016e42c3bd..dd16389e7c 100644
 +                                           http_active_base_headers(data)) &&
 +          (data->state.followlocation > 0 ||
 +           data->state.chromium_critical_ch_retry)) {
-+    order = (data->state.followlocation > 0) ?
-+      CHROMIUM_NAV_REDIRECT_HEADER_ORDER :
-+      CHROMIUM_NAV_CRIT_CH_HEADER_ORDER;
++    if(data->state.followlocation <= 0)
++      order = CHROMIUM_NAV_CRIT_CH_HEADER_ORDER;
++    else
++      order = http_order_origin_first(order) ?
++        CHROMIUM143_NAV_REDIRECT_HEADER_ORDER :
++        CHROMIUM_NAV_REDIRECT_HEADER_ORDER;
 +  }
 +  else if(data->conn &&
 +          (Curl_conn_http_version(data, data->conn) == 30) &&
@@ -4239,7 +4490,7 @@ index 016e42c3bd..dd16389e7c 100644
  static CURLcode http_add_content_hds(struct Curl_easy *data,
                                       struct dynbuf *r,
                                       int httpversion,
-@@ -2566,6 +4169,27 @@ static CURLcode http_add_content_hds(struct Curl_easy *data,
+@@ -2566,6 +4333,28 @@ static CURLcode http_add_content_hds(struct Curl_easy *data,
        }
      }
  #endif
@@ -4252,6 +4503,7 @@ index 016e42c3bd..dd16389e7c 100644
 +    {
 +      const char *sfm = Curl_checkheaders(data, STRCONST("Sec-Fetch-Mode"));
 +      if(httpreq != HTTPREQ_PUT && !http_is_gecko(data) &&
++         !http_is_webkit(data) &&
 +         (CURL_EASY_STR(data, STRING_HTTPHEADER_ORDER) ||
 +          CURL_EASY_STR(data, STRING_HTTP3_HTTPHEADER_ORDER)) &&
 +         Curl_checkheaders(data, STRCONST("Sec-CH-UA")) &&
@@ -4267,7 +4519,7 @@ index 016e42c3bd..dd16389e7c 100644
      if(httpreq == HTTPREQ_POST &&
         !Curl_checkheaders(data, STRCONST("Content-Type"))) {
        result = curlx_dyn_addn(r, STRCONST("Content-Type: application/"
-@@ -2578,6 +4202,12 @@ static CURLcode http_add_content_hds(struct Curl_easy *data,
+@@ -2578,6 +4367,12 @@ static CURLcode http_add_content_hds(struct Curl_easy *data,
        goto out;
      break;
    default:
@@ -4280,7 +4532,7 @@ index 016e42c3bd..dd16389e7c 100644
      break;
    }
  
-@@ -2597,9 +4227,18 @@ static CURLcode http_cookies(struct Curl_easy *data,
+@@ -2597,9 +4392,18 @@ static CURLcode http_cookies(struct Curl_easy *data,
    CURLcode result = CURLE_OK;
    const char *addcookies = NULL;
    bool linecap = FALSE;
@@ -4300,7 +4552,7 @@ index 016e42c3bd..dd16389e7c 100644
      addcookies = CURL_EASY_STR(data, STRING_COOKIE);
  
    if(data->cookies || addcookies) {
-@@ -2621,6 +4260,22 @@ static CURLcode http_cookies(struct Curl_easy *data,
+@@ -2621,6 +4425,22 @@ static CURLcode http_cookies(struct Curl_easy *data,
            struct Cookie *co = Curl_node_elem(n);
            if(co->value) {
              size_t add;
@@ -4323,7 +4575,7 @@ index 016e42c3bd..dd16389e7c 100644
              if(!count) {
                result = curlx_dyn_addn(r, STRCONST("Cookie: "));
                if(result)
-@@ -2645,7 +4300,32 @@ static CURLcode http_cookies(struct Curl_easy *data,
+@@ -2645,7 +4465,32 @@ static CURLcode http_cookies(struct Curl_easy *data,
        }
        Curl_share_unlock(data, CURL_LOCK_DATA_COOKIE);
      }
@@ -4357,7 +4609,7 @@ index 016e42c3bd..dd16389e7c 100644
        if(!count)
          result = curlx_dyn_addn(r, STRCONST("Cookie: "));
        if(!result) {
-@@ -2653,7 +4333,7 @@ static CURLcode http_cookies(struct Curl_easy *data,
+@@ -2653,7 +4498,7 @@ static CURLcode http_cookies(struct Curl_easy *data,
          count++;
        }
      }
@@ -4366,7 +4618,7 @@ index 016e42c3bd..dd16389e7c 100644
        result = curlx_dyn_addn(r, STRCONST("\r\n"));
  
      if(result)
-@@ -2843,7 +4523,7 @@ static CURLcode http_add_connection_hd(struct Curl_easy *data,
+@@ -2843,7 +4688,7 @@ static CURLcode http_add_connection_hd(struct Curl_easy *data,
    bool skip;
  
    /* Add the 1st custom "Connection: " header, if there is one */
@@ -4375,7 +4627,7 @@ index 016e42c3bd..dd16389e7c 100644
      if(curl_strnequal(head->data, "Connection", 10) &&
         Curl_headersep(head->data[10]) &&
         !http_header_is_empty(head->data)) {
-@@ -2877,7 +4557,7 @@ static CURLcode http_add_connection_hd(struct Curl_easy *data,
+@@ -2877,7 +4722,7 @@ static CURLcode http_add_connection_hd(struct Curl_easy *data,
  
    /* Add all user-defined Connection: headers after the first */
    skip = TRUE;
@@ -4384,7 +4636,7 @@ index 016e42c3bd..dd16389e7c 100644
      if(curl_strnequal(head->data, "Connection", 10) &&
         Curl_headersep(head->data[10]) &&
         !http_header_is_empty(head->data)) {
-@@ -2982,8 +4662,7 @@ static CURLcode http_add_hd(struct Curl_easy *data,
+@@ -2982,8 +4827,7 @@ static CURLcode http_add_hd(struct Curl_easy *data,
    }
  
    case H1_HD_ACCEPT:
@@ -4394,7 +4646,7 @@ index 016e42c3bd..dd16389e7c 100644
      break;
  
    case H1_HD_TE:
-@@ -3119,8 +4798,12 @@ CURLcode Curl_http(struct Curl_easy *data, bool *done)
+@@ -3119,8 +4963,12 @@ CURLcode Curl_http(struct Curl_easy *data, bool *done)
    /* what kind of request do we need to send? */
    Curl_http_method(data, &method, &httpreq);
  
@@ -4408,7 +4660,7 @@ index 016e42c3bd..dd16389e7c 100644
    /* setup the authentication headers, how that method and host are known */
    if(!result)
      result = Curl_http_output_auth(data, data->conn, method, httpreq,
-@@ -3145,6 +4828,10 @@ CURLcode Curl_http(struct Curl_easy *data, bool *done)
+@@ -3145,6 +4993,10 @@ CURLcode Curl_http(struct Curl_easy *data, bool *done)
        goto out;
    }
  
@@ -4419,7 +4671,7 @@ index 016e42c3bd..dd16389e7c 100644
    /* setup variables for the upcoming transfer and send */
    Curl_xfer_setup_sendrecv(data, FIRSTSOCKET, -1);
    result = Curl_req_send(data, &req, httpversion);
-@@ -3593,6 +5280,14 @@ static CURLcode http_header_s(struct Curl_easy *data,
+@@ -3593,6 +5445,14 @@ static CURLcode http_header_s(struct Curl_easy *data,
    (void)hdlen;
  #endif
  
@@ -4434,7 +4686,7 @@ index 016e42c3bd..dd16389e7c 100644
  #ifndef CURL_DISABLE_COOKIES
    v = (data->cookies && data->state.cookie_engine) ?
      HD_VAL(hd, hdlen, "Set-Cookie:") : NULL;
-@@ -3607,7 +5302,8 @@ static CURLcode http_header_s(struct Curl_easy *data,
+@@ -3607,7 +5467,8 @@ static CURLcode http_header_s(struct Curl_easy *data,
      Curl_share_lock(data, CURL_LOCK_DATA_COOKIE, CURL_LOCK_ACCESS_SINGLE);
      result = Curl_cookie_add(data, data->cookies, v, host,
                               data->state.up.path,
@@ -4444,7 +4696,7 @@ index 016e42c3bd..dd16389e7c 100644
      Curl_share_unlock(data, CURL_LOCK_DATA_COOKIE);
      return result;
    }
-@@ -3723,10 +5419,30 @@ static CURLcode http_header(struct Curl_easy *data,
+@@ -3723,10 +5584,30 @@ static CURLcode http_header(struct Curl_easy *data,
    case 'a':
    case 'A':
      result = http_header_a(data, hd, hdlen);
@@ -4475,7 +4727,7 @@ index 016e42c3bd..dd16389e7c 100644
      break;
    case 'l':
    case 'L':
-@@ -4253,6 +5969,26 @@ static CURLcode http_on_response(struct Curl_easy *data,
+@@ -4253,6 +6134,26 @@ static CURLcode http_on_response(struct Curl_easy *data,
        goto out;
    }
  
@@ -4502,7 +4754,7 @@ index 016e42c3bd..dd16389e7c 100644
    /* final response without error, prepare to receive the body */
    result = http_firstwrite(data);
    if(result)
-@@ -4999,6 +6735,29 @@ static bool http_TE_has_token(const char *fvalue, const char *token)
+@@ -4999,6 +6900,29 @@ static bool http_TE_has_token(const char *fvalue, const char *token)
    return FALSE;
  }
  
@@ -4532,7 +4784,7 @@ index 016e42c3bd..dd16389e7c 100644
  CURLcode Curl_http_req_to_h2(struct dynhds *h2_headers,
                               struct httpreq *req, struct Curl_easy *data)
  {
-@@ -5007,6 +6766,10 @@ CURLcode Curl_http_req_to_h2(struct dynhds *h2_headers,
+@@ -5007,6 +6931,10 @@ CURLcode Curl_http_req_to_h2(struct dynhds *h2_headers,
    size_t i;
    CURLcode result;
  
@@ -4543,7 +4795,7 @@ index 016e42c3bd..dd16389e7c 100644
    DEBUGASSERT(req);
    DEBUGASSERT(h2_headers);
  
-@@ -5036,20 +6799,46 @@ CURLcode Curl_http_req_to_h2(struct dynhds *h2_headers,
+@@ -5036,20 +6964,46 @@ CURLcode Curl_http_req_to_h2(struct dynhds *h2_headers,
  
    Curl_dynhds_reset(h2_headers);
    Curl_dynhds_set_opts(h2_headers, DYNHDS_OPT_LOWERCASE);
@@ -4601,7 +4853,7 @@ index 016e42c3bd..dd16389e7c 100644
    for(i = 0; !result && i < Curl_dynhds_count(&req->headers); ++i) {
      e = Curl_dynhds_getn(&req->headers, i);
      /* "TE" is special in that it is only permissible when it
-@@ -5062,6 +6851,8 @@ CURLcode Curl_http_req_to_h2(struct dynhds *h2_headers,
+@@ -5062,6 +7016,8 @@ CURLcode Curl_http_req_to_h2(struct dynhds *h2_headers,
      else if(h2_permissible_field(e)) {
        result = Curl_dynhds_add(h2_headers, e->name, e->namelen,
                                 e->value, e->valuelen);
@@ -4611,7 +4863,7 @@ index 016e42c3bd..dd16389e7c 100644
    }
  
 diff --git a/lib/http2.c b/lib/http2.c
-index 9010179e57..15c33c2977 100644
+index 9010179e57..980e8a6b3e 100644
 --- a/lib/http2.c
 +++ b/lib/http2.c
 @@ -46,6 +46,7 @@
@@ -4899,8 +5151,8 @@ index 9010179e57..15c33c2977 100644
 +
  static int sweight_wanted(const struct Curl_easy *data)
  {
-+  /* curl-impersonate: a header engine (gecko) may pick the weight by the
-+   * request mode (navigation vs. fetch). */
++  /* curl-impersonate: a header engine (gecko, explicit chromium) may pick
++   * the weight by the request mode (navigation vs. fetch). */
 +  if(data->state.engine_weight)
 +    return data->state.engine_weight;
    /* 0 weight is not set by user and we take the nghttp2 default one */
@@ -5077,10 +5329,10 @@ index c3270da1cc..807f0ad6ae 100644
   * Store nghttp2 version info in this buffer.
 diff --git a/lib/impersonate.c b/lib/impersonate.c
 new file mode 100644
-index 0000000000..f6f5b9cd23
+index 0000000000..34b360a061
 --- /dev/null
 +++ b/lib/impersonate.c
-@@ -0,0 +1,3303 @@
+@@ -0,0 +1,3407 @@
 +#include "curl_setup.h"
 +#include <curl/curl.h>
 +#include "impersonate.h"
@@ -8315,6 +8567,110 @@ index 0000000000..f6f5b9cd23
 +    },
 +  },
 +  {
++    .target = "safari27_ios",
++    .alias = "safari27_ios",
++    .ciphers = "TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES256-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA:ECDHE-RSA-AES128-SHA:AES256-GCM-SHA384:AES128-GCM-SHA256:AES256-SHA:AES128-SHA:ECDHE-ECDSA-DES-CBC3-SHA:ECDHE-RSA-DES-CBC3-SHA:DES-CBC3-SHA",
++    .httpversion = CURL_HTTP_VERSION_2_0,
++    .ssl_version = CURL_SSLVERSION_TLSv1_2 | CURL_SSLVERSION_MAX_DEFAULT,
++    .curves = "X25519MLKEM768:X25519:P-256:P-384:P-521",
++    .http3_curves = "X25519MLKEM768:X25519:P-256:P-384:P-521",
++    .sig_hash_algs = "ecdsa_secp256r1_sha256:rsa_pss_rsae_sha256:rsa_pkcs1_sha256:ecdsa_secp384r1_sha384:rsa_pss_rsae_sha384:rsa_pss_rsae_sha384:rsa_pkcs1_sha384:rsa_pss_rsae_sha512:rsa_pkcs1_sha512:rsa_pkcs1_sha1",
++    .cert_compression = "zlib",
++    .tls_delegated_credentials = NULL,
++    .tls_trust_anchors = NULL,
++    .alpn = true,
++    .alps = false,
++    .ech = NULL,
++    .http_header_order = "sec-fetch-dest,user-agent,accept,referer,sec-fetch-site,sec-fetch-mode,accept-language,priority,accept-encoding,cookie",
++    .http3_http_header_order = "user-agent,accept,referer,accept-language,priority,accept-encoding,cookie",
++    .tls_session_ticket = false,
++    .tls_permute_extensions = false,
++    .tls_grease = true,
++    .tls_use_new_alps_codepoint = false,
++    .tls_signed_cert_timestamps = true,
++    .tls_record_size_limit = 0,
++    .tls_key_shares_limit = 2,
++    .tls_extension_order = "0-23-65281-10-11-16-5-13-18-51-45-43-27",
++    .http2_settings = "2:0;3:100;4:2097152;9:1",
++    .http2_window_update = 10420225,
++    .http2_pseudo_headers_order = "msap",
++    .http2_no_priority = true,
++    .http3_settings = "1:16383;7:100;GREASE",
++    .http3_pseudo_headers_order = "msap",
++    .http3_tls_extension_order = "0-10-16-5-13-18-51-45-43-57-27",
++    .quic_transport_parameters = "9:8;14:64;15:AUTO;4:16777216;5:2097152;6:2097152;7:2097152;4278716424:0x09",
++    .split_cookies = true,
++    .form_boundary = "webkit",
++    .header_engine = "webkit",
++    .http2_stream_weight = 0,
++    .http2_stream_exclusive = 0,
++    .http_headers = {
++      "sec-fetch-dest: document",
++      "user-agent: Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Mobile/15E148 Safari/604.1",
++      "accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
++      "sec-fetch-site: none",
++      "sec-fetch-mode: navigate",
++      "accept-language: en-US,en;q=0.9",
++      "priority: u=0, i",
++      "accept-encoding: gzip, deflate, br, zstd",
++    },
++    .http3_headers = {
++      "user-agent: Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Mobile/15E148 Safari/604.1",
++      "accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
++      "accept-language: en-US,en;q=0.9",
++      "priority: u=3",
++      "accept-encoding: gzip, deflate, br",
++    },
++  },
++  {
++    .target = "samsung30_android",
++    .alias = "samsung30_android",
++    .ciphers = "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-RSA-AES128-SHA:ECDHE-RSA-AES256-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA:AES256-SHA",
++    .httpversion = CURL_HTTP_VERSION_2_0,
++    .ssl_version = CURL_SSLVERSION_TLSv1_2 | CURL_SSLVERSION_MAX_DEFAULT,
++    .curves = "X25519MLKEM768:X25519:P-256:P-384",
++    .sig_hash_algs = "ecdsa_secp256r1_sha256:rsa_pss_rsae_sha256:rsa_pkcs1_sha256:ecdsa_secp384r1_sha384:rsa_pss_rsae_sha384:rsa_pkcs1_sha384:rsa_pss_rsae_sha512:rsa_pkcs1_sha512",
++    .cert_compression = "brotli",
++    .tls_delegated_credentials = NULL,
++    .tls_trust_anchors = NULL,
++    .alpn = true,
++    .alps = true,
++    .ech = "true",
++    .http_header_order = "host,connection,content-length,pragma,cache-control,rtt,downlink,ect,sec-ch-ua,sec-ch-ua-mobile,sec-ch-ua-full-version,sec-ch-ua-arch,sec-ch-ua-platform,sec-ch-ua-platform-version,sec-ch-ua-model,sec-ch-ua-bitness,sec-ch-ua-wow64,sec-ch-ua-full-version-list,sec-ch-ua-form-factors,sec-ch-prefers-color-scheme,origin,content-type,upgrade-insecure-requests,user-agent,accept,sec-fetch-site,sec-fetch-mode,sec-fetch-user,sec-fetch-dest,referer,accept-encoding,accept-language,cookie,priority",
++    .tls_session_ticket = true,
++    .tls_permute_extensions = true,
++    .tls_grease = true,
++    .tls_use_new_alps_codepoint = true,
++    .tls_signed_cert_timestamps = true,
++    .tls_record_size_limit = 0,
++    .tls_key_shares_limit = 2,
++    .tls_extension_order = NULL,
++    .http2_settings = "1:65536;2:0;4:6291456;6:262144",
++    .http2_window_update = 15663105,
++    .http2_pseudo_headers_order = "masp",
++    .http2_no_priority = false,
++    .split_cookies = true,
++    .form_boundary = "webkit",
++    .header_engine = "chromium",
++    .http2_stream_weight = 256,
++    .http2_stream_exclusive = 1,
++    .http_headers = {
++      "sec-ch-ua: \"Samsung Internet\";v=\"30.0\", \"Chromium\";v=\"143\", \"Not A(Brand\";v=\"24\"",
++      "sec-ch-ua-mobile: ?1",
++      "sec-ch-ua-platform: \"Android\"",
++      "upgrade-insecure-requests: 1",
++      "user-agent: Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/30.0 Chrome/143.0.0.0 Mobile Safari/537.36",
++      "accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
++      "sec-fetch-site: none",
++      "sec-fetch-mode: navigate",
++      "sec-fetch-user: ?1",
++      "sec-fetch-dest: document",
++      "accept-encoding: gzip, deflate, br",
++      "accept-language: en-US,en;q=0.9",
++      "priority: u=0, i",
++    },
++  },
++  {
 +    .target = "tor145",  // tor 14.5, based on firefox 128
 +    .alias = "tor145",
 +    .httpversion = CURL_HTTP_VERSION_2_0,
@@ -8386,7 +8742,7 @@ index 0000000000..f6f5b9cd23
 +const size_t num_impersonations = sizeof(impersonations) / sizeof(impersonations[0]);
 diff --git a/lib/impersonate.h b/lib/impersonate.h
 new file mode 100644
-index 0000000000..d20301d789
+index 0000000000..741dffae95
 --- /dev/null
 +++ b/lib/impersonate.h
 @@ -0,0 +1,107 @@
@@ -8464,8 +8820,8 @@ index 0000000000..d20301d789
 +  bool proxy_credential_no_reuse;  // do not reuse TLS sessions or connections from different proxy credentials
 +  bool split_cookies;  // split cookies into one Cookie header per pair
 +  const char *form_boundary;
-+  /* Header engine: "chromium" or "gecko". NULL keeps the legacy behavior
-+   * (the Chromium engine is detected by the presence of sec-ch-ua). */
++  /* Header engine: "chromium", "gecko" or "webkit". NULL keeps the legacy
++   * behavior (the Chromium engine is detected by the presence of sec-ch-ua). */
 +  const char *header_engine;
 +  /* First HTTP/2 stream id (odd). 0 keeps the nghttp2 default (1). */
 +  int http2_initial_stream_id;
@@ -8694,7 +9050,7 @@ index a7b14601de..aacb7f390b 100644
  };
  
 diff --git a/lib/setopt.c b/lib/setopt.c
-index dff8a6dc12..a2de37d114 100644
+index dff8a6dc12..1565b51537 100644
 --- a/lib/setopt.c
 +++ b/lib/setopt.c
 @@ -45,8 +45,10 @@
@@ -9034,7 +9390,7 @@ index dff8a6dc12..a2de37d114 100644
    case CURLOPT_SSL_SIGNATURE_ALGORITHMS:
      /*
       * Set accepted signature algorithms.
-@@ -2489,6 +2722,110 @@ static CURLcode setopt_cptr_misc(struct Curl_easy *data, CURLoption option,
+@@ -2489,6 +2722,112 @@ static CURLcode setopt_cptr_misc(struct Curl_easy *data, CURLoption option,
    return result;
  }
  
@@ -9133,8 +9489,10 @@ index dff8a6dc12..a2de37d114 100644
 +  case CURLOPT_TLS_TRUST_ANCHORS:
 +    return Curl_setstropt(data, STRING_TLS_TRUST_ANCHORS, ptr);
 +  case CURLOPT_HEADER_ENGINE:
-+    /* curl-impersonate: "chromium", "gecko" or NULL (legacy detection) */
-+    if(ptr && !curl_strequal(ptr, "chromium") && !curl_strequal(ptr, "gecko"))
++    /* curl-impersonate: "chromium", "gecko", "webkit" or NULL (legacy
++       detection) */
++    if(ptr && !curl_strequal(ptr, "chromium") &&
++       !curl_strequal(ptr, "gecko") && !curl_strequal(ptr, "webkit"))
 +      return CURLE_BAD_FUNCTION_ARGUMENT;
 +    return Curl_setstropt(data, STRING_HEADER_ENGINE, ptr);
 +  default:
@@ -9145,7 +9503,7 @@ index dff8a6dc12..a2de37d114 100644
  static CURLcode setopt_cptr(struct Curl_easy *data, CURLoption option,
                              char *ptr)
  {
-@@ -2500,6 +2837,7 @@ static CURLcode setopt_cptr(struct Curl_easy *data, CURLoption option,
+@@ -2500,6 +2839,7 @@ static CURLcode setopt_cptr(struct Curl_easy *data, CURLoption option,
  #if defined(USE_SSL) || defined(USE_SSH)
      setopt_cptr_ssl,
  #endif
@@ -9153,7 +9511,7 @@ index dff8a6dc12..a2de37d114 100644
  #ifndef CURL_DISABLE_PROXY
      setopt_cptr_proxy,
  #endif
-@@ -2889,6 +3227,9 @@ CURLcode Curl_vsetopt(struct Curl_easy *data, CURLoption option, va_list param)
+@@ -2889,6 +3229,9 @@ CURLcode Curl_vsetopt(struct Curl_easy *data, CURLoption option, va_list param)
         way than being listed explicitly */
      switch(option) {
      case CURLOPT_HTTPHEADER:
@@ -9906,7 +10264,7 @@ index d8e77c7f13..4ffeda15f3 100644
  
  #endif /* HEADER_CURL_SOCKS_H */
 diff --git a/lib/transfer.c b/lib/transfer.c
-index 3f0f2157ae..1c83e17ae6 100644
+index 3f0f2157ae..09fbf8827b 100644
 --- a/lib/transfer.c
 +++ b/lib/transfer.c
 @@ -74,7 +74,25 @@
@@ -9947,7 +10305,7 @@ index 3f0f2157ae..1c83e17ae6 100644
      if(curl_strnequal(head->data, thisheader, thislen) &&
         Curl_headersep(head->data[thislen]))
        return head->data;
-@@ -512,6 +532,17 @@ CURLcode Curl_pretransfer(struct Curl_easy *data)
+@@ -512,6 +532,18 @@ CURLcode Curl_pretransfer(struct Curl_easy *data)
                      CURL_EASY_STR(data, STRING_SET_REFERER), 0, NULL);
    else
      Curl_bufref_free(&data->state.referer);
@@ -9956,6 +10314,7 @@ index 3f0f2157ae..1c83e17ae6 100644
 +  data->state.chromium_sent_ch_mask = 0;
 +  data->state.chromium_crit_ch_mask = 0;
 +  data->state.chromium_redirect_sfs = 0;
++  data->state.redirect_hop_sfs = 0;
 +#ifndef CURL_DISABLE_HTTP
 +  data->state.chromium_nav_post_cache_validate = FALSE;
 +  data->state.chromium_critical_ch_retry = FALSE;
@@ -10108,7 +10467,7 @@ index b189d52841..36fdd7c99e 100644
  
  #endif /* USE_HTTP2 || USE_HTTP3 */
 diff --git a/lib/urldata.h b/lib/urldata.h
-index 249331d30b..b4348f42c4 100644
+index 249331d30b..aa28ac7b5b 100644
 --- a/lib/urldata.h
 +++ b/lib/urldata.h
 @@ -182,6 +182,7 @@ struct ConnectBits {
@@ -10167,7 +10526,7 @@ index 249331d30b..b4348f42c4 100644
    char *effective_url; /* when needed */
    curl_off_t retry_after; /* info from Retry-After: header */
    const char *conn_scheme;
-@@ -600,6 +621,27 @@ struct UrlState {
+@@ -600,6 +621,29 @@ struct UrlState {
                                      curl_easy_setopt(COOKIEFILE) calls */
  #endif
  
@@ -10191,11 +10550,13 @@ index 249331d30b..b4348f42c4 100644
 +  char *chromium_initial_referer;
 +  char *gecko_origin; /* curl-impersonate: "Origin: ..." of the initiator */
 +  uint8_t chromium_redirect_sfs;
++  uint8_t redirect_hop_sfs; /* curl-impersonate: sfs of the last redirect
++                               hop (old URL -> new URL), 0 = none */
 +
  #ifdef CURLVERBOSE
    struct curl_trc_feat *feat; /* opt. trace feature transfer is part of */
  #endif
-@@ -631,6 +673,9 @@ struct UrlState {
+@@ -631,6 +675,9 @@ struct UrlState {
  
  #if defined(USE_HTTP2) || defined(USE_HTTP3)
    int weight; /* shallow copy of data->set */
@@ -10205,7 +10566,7 @@ index 249331d30b..b4348f42c4 100644
  #endif
    uint16_t followlocation; /* redirect counter */
    uint8_t retrycount; /* number of retries on a new connection, up to
-@@ -678,6 +723,10 @@ struct UrlState {
+@@ -678,6 +725,10 @@ struct UrlState {
    BIT(http_hd_h2_settings); /* Added HTTP header H2Settings: */
    BIT(maybe_folded);
    BIT(leading_unfold); /* unfold started, this is the leading bytes */
@@ -10216,7 +10577,7 @@ index 249331d30b..b4348f42c4 100644
  #endif
  };
  
-@@ -706,6 +755,8 @@ enum dupstring {
+@@ -706,6 +757,8 @@ enum dupstring {
    STRING_SSL_CRLFILE,     /* CRL file to check certificate */
    STRING_SSL_ISSUERCERT,  /* issuer cert file to check certificate */
    STRING_SERVICE_NAME,    /* Service name */
@@ -10225,7 +10586,7 @@ index 249331d30b..b4348f42c4 100644
  #ifndef CURL_DISABLE_PROXY
    STRING_CERT_PROXY,      /* client certificate filename */
    STRING_CERT_TYPE_PROXY, /* format for certificate (default: PEM)*/
-@@ -794,6 +845,8 @@ enum dupstring {
+@@ -794,6 +847,8 @@ enum dupstring {
    STRING_DNS_LOCAL_IP6,
  #endif
    STRING_SSL_EC_CURVES,
@@ -10234,7 +10595,7 @@ index 249331d30b..b4348f42c4 100644
  #ifndef CURL_DISABLE_AWS
    STRING_AWS_SIGV4, /* Parameters for V4 signature */
  #endif
-@@ -807,6 +860,24 @@ enum dupstring {
+@@ -807,6 +862,24 @@ enum dupstring {
  #endif
    STRING_ECH_CONFIG,            /* CURLOPT_ECH_CONFIG */
    STRING_ECH_PUBLIC,            /* CURLOPT_ECH_PUBLIC */
@@ -10259,7 +10620,7 @@ index 249331d30b..b4348f42c4 100644
    STRING_SSL_SIGNATURE_ALGORITHMS, /* CURLOPT_SSL_SIGNATURE_ALGORITHMS */
  
    STRING_LAST /* not used, an end-of-list marker */
-@@ -881,6 +952,8 @@ struct UserDefined {
+@@ -881,6 +954,8 @@ struct UserDefined {
                                  download */
    curl_off_t set_resume_from;  /* continue [ftp] transfer from here */
    struct curl_slist *headers; /* linked list of extra headers */
@@ -10268,7 +10629,7 @@ index 249331d30b..b4348f42c4 100644
    struct curl_httppost *httppost;  /* linked list of old POST data */
  #if !defined(CURL_DISABLE_MIME) || !defined(CURL_DISABLE_FORM_API)
    curl_mimepart *mimepostp;  /* MIME/POST data. */
-@@ -1048,6 +1121,7 @@ struct UserDefined {
+@@ -1048,6 +1123,7 @@ struct UserDefined {
    BIT(sep_headers);     /* handle host and proxy headers separately */
  #ifndef CURL_DISABLE_COOKIES
    BIT(cookiesession);   /* new cookie session? */
@@ -10276,7 +10637,7 @@ index 249331d30b..b4348f42c4 100644
  #endif
    BIT(crlf);            /* convert crlf on ftp upload(?) */
  #ifdef USE_SSH
-@@ -1064,6 +1138,7 @@ struct UserDefined {
+@@ -1064,6 +1140,7 @@ struct UserDefined {
    BIT(get_filetime);     /* get the time and get of the remote file */
  #ifndef CURL_DISABLE_PROXY
    BIT(tunnel_thru_httpproxy); /* use CONNECT through an HTTP proxy */
@@ -10284,7 +10645,7 @@ index 249331d30b..b4348f42c4 100644
  #endif
    BIT(prefer_ascii);     /* ASCII rather than binary */
    BIT(remote_append);    /* append, not overwrite, on upload */
-@@ -1107,7 +1182,19 @@ struct UserDefined {
+@@ -1107,7 +1184,19 @@ struct UserDefined {
    BIT(sasl_ir);         /* Enable/disable SASL initial response */
    BIT(tcp_keepalive);  /* use TCP keepalives */
    BIT(tcp_fastopen);   /* use TCP Fast Open */
@@ -10304,7 +10665,7 @@ index 249331d30b..b4348f42c4 100644
    BIT(path_as_is);     /* allow dotdots? */
    BIT(pipewait);       /* wait for multiplex status before starting a new
                            connection */
-@@ -1132,7 +1219,19 @@ struct UserDefined {
+@@ -1132,7 +1221,19 @@ struct UserDefined {
  #ifndef CURL_DISABLE_WEBSOCKETS
    BIT(ws_raw_mode);
    BIT(ws_no_auto_pong);
@@ -16298,7 +16659,7 @@ index 7a587f6675..84fa9355c5 100644
    BIT(tr_encoding);         /* Transfer-Encoding please */
    BIT(use_resume);
 diff --git a/src/tool_getparam.c b/src/tool_getparam.c
-index 44825f83f2..2cade86aa2 100644
+index 44825f83f2..7d411c7d98 100644
 --- a/src/tool_getparam.c
 +++ b/src/tool_getparam.c
 @@ -76,6 +76,7 @@ static ParameterError getstrn(char **str, const char *val,
@@ -16574,7 +16935,7 @@ index 44825f83f2..2cade86aa2 100644
    case C_LOCATION_TRUSTED: /* --location-trusted */
      config->unrestricted_auth = toggle;
      FALLTHROUGH();
-@@ -2713,6 +2823,157 @@ static ParameterError opt_string(struct OperationConfig *config,
+@@ -2713,6 +2823,158 @@ static ParameterError opt_string(struct OperationConfig *config,
        err = PARAM_BAD_USE;
      }
      break;
@@ -16594,7 +16955,8 @@ index 44825f83f2..2cade86aa2 100644
 +    err = getstr(&config->tls_trust_anchors, nextarg, ALLOW_BLANK);
 +    break;
 +  case C_HEADER_ENGINE: /* --header-engine curl-impersonate */
-+    if(!curl_strequal(nextarg, "chromium") && !curl_strequal(nextarg, "gecko"))
++    if(!curl_strequal(nextarg, "chromium") &&
++       !curl_strequal(nextarg, "gecko") && !curl_strequal(nextarg, "webkit"))
 +      err = PARAM_BAD_USE;
 +    else
 +      err = getstr(&config->header_engine, nextarg, DENY_BLANK);
@@ -16732,7 +17094,7 @@ index 44825f83f2..2cade86aa2 100644
    case C_TRACE_CONFIG: /* --trace-config */
      global->trace_set = TRUE;
      if(set_trace_config(nextarg))
-@@ -2742,6 +3003,9 @@ static ParameterError opt_string(struct OperationConfig *config,
+@@ -2742,6 +3004,9 @@ static ParameterError opt_string(struct OperationConfig *config,
      else
        err = getstr(&config->hsts, nextarg, ALLOW_BLANK);
      break;
@@ -16742,7 +17104,7 @@ index 44825f83f2..2cade86aa2 100644
    case C_COOKIE: /* --cookie */
      if(strchr(nextarg, '=')) {
        /* A cookie string must have a =-letter */
-@@ -2858,8 +3122,14 @@ static ParameterError opt_string(struct OperationConfig *config,
+@@ -2858,8 +3123,14 @@ static ParameterError opt_string(struct OperationConfig *config,
    case C_REQUEST_TARGET: /* --request-target */
      err = getstr(&config->request_target, nextarg, DENY_BLANK);
      break;
@@ -16757,7 +17119,7 @@ index 44825f83f2..2cade86aa2 100644
      err = parse_header(config, (cmdline_t)a->cmd, nextarg);
      break;
    case C_OUTPUT_DIR: /* --output-dir */
-@@ -3159,6 +3429,13 @@ ParameterError parse_args(int argc, argv_item_t argv[])
+@@ -3159,6 +3430,13 @@ ParameterError parse_args(int argc, argv_item_t argv[])
              /* Allocate the next config */
              config->next = config_alloc();
              if(config->next) {
@@ -16955,7 +17317,7 @@ index aaf69282c1..06941bed6f 100644
    if(built_in_protos[0]) {
  #ifndef CURL_DISABLE_IPFS
 diff --git a/src/tool_listhelp.c b/src/tool_listhelp.c
-index b6d3ddfd1d..9842c4e59b 100644
+index b6d3ddfd1d..9d6edf33d7 100644
 --- a/src/tool_listhelp.c
 +++ b/src/tool_listhelp.c
 @@ -37,6 +37,9 @@ const struct helptxt helptext[] = {
@@ -17003,7 +17365,7 @@ index b6d3ddfd1d..9842c4e59b 100644
      "Pass custom header(s) to server",
      CURLHELP_IMPORTANT | CURLHELP_HTTP | CURLHELP_IMAP | CURLHELP_SMTP },
 +  { "    --header-engine <name>",
-+    "Browser header engine: chromium or gecko",
++    "Browser header engine: chromium, gecko or webkit",
 +    CURLHELP_HTTP },
    { "-h, --help <subject>",
      "Get help for commands",

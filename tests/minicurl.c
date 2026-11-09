@@ -178,7 +178,7 @@ int set_opts(CURL *curl, struct opts *opts, FILE *file)
     if (opts->local_port_start && opts->local_port_end) {
         c = curl_easy_setopt(curl,
                              CURLOPT_LOCALPORT,
-                             opts->local_port_start);
+                             (long)opts->local_port_start);
         if (c) {
             fprintf(stderr, "curl_easy_setopt(CURLOPT_LOCALPORT) failed\n");
             return 1;
@@ -186,7 +186,7 @@ int set_opts(CURL *curl, struct opts *opts, FILE *file)
 
         c = curl_easy_setopt(curl,
                              CURLOPT_LOCALPORTRANGE,
-                             opts->local_port_end - opts->local_port_start);
+                             (long)(opts->local_port_end - opts->local_port_start));
         if (c) {
             fprintf(stderr,
                     "curl_easy_setopt(CURLOPT_LOCALPORTRANGE) failed\n");
@@ -195,12 +195,12 @@ int set_opts(CURL *curl, struct opts *opts, FILE *file)
     }
 
     if (opts->insecure) {
-        c = curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
+        c = curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
         if (c) {
             fprintf(stderr, "curl_easy_setopt(CURLOPT_SSL_VERIFYPEER) failed\n");
             return 1;
         }
-        c = curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0);
+        c = curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
         if (c) {
             fprintf(stderr, "curl_easy_setopt(CURLOPT_SSL_VERIFYHOST) failed\n");
             return 1;

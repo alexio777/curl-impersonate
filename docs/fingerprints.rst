@@ -35,6 +35,7 @@ extended list as an API on `impersonate.pro <https://impersonate.pro>`_. See :do
    "Chrome", "157", "macOS 26.0", "``chrome157_macos``", "``curl_chrome157_macos``", "Yes"
    "Chrome", "99", "Android 12", "``chrome99_android``", "``curl_chrome99_android``", ""
    "Chrome", "131", "Android 14", "``chrome131_android``", "``curl_chrome131_android``", ""
+   "Samsung Internet", "30.0.2.45", "Android 16 (Galaxy S26)", "``samsung30_android``", "``curl_samsung30_android``", ""
    "Edge", "99", "Windows 10", "``edge99``", "``curl_edge99``", ""
    "Edge", "101", "Windows 10", "``edge101``", "``curl_edge101``", ""
    "Safari", "15.3", "macOS Big Sur", "``safari153``", "``curl_safari153``", ""
@@ -50,6 +51,7 @@ extended list as an API on `impersonate.pro <https://impersonate.pro>`_. See :do
    "Safari", "26.0.1", "macOS Tahoe", "``safari2601``", "``curl_safari2601``", ""
    "Safari", "27.0", "macOS 27.0", "``safari270``", "``curl_safari270``", "Yes"
    "Safari", "27.0", "iOS 27.0", "``safari270_ios``", "``curl_safari270_ios``", "Yes"
+   "Safari", "27.0", "iOS 27 (iPhone 18 Pro)", "``safari27_ios``", "``curl_safari27_ios``", ""
    "Firefox", "133.0", "macOS Sonoma", "``firefox133``", "``curl_firefox133``", ""
    "Firefox", "135.0", "macOS Sonoma", "``firefox135``", "``curl_firefox135``", ""
    "Firefox", "144.0", "macOS Tahoe", "``firefox144``", "``curl_firefox144``", ""
@@ -75,6 +77,12 @@ Notes:
    Firefox 153, 154, and 155 profiles do not include dedicated HTTP/3 fingerprints.
    Enabling HTTP/3 in the binary does not make every profile match a browser's
    HTTP/3 fingerprint.
+5. ``safari27_ios`` (Safari 27.0, iPhone 18 Pro, iOS 27) and
+   ``samsung30_android`` (Samsung Internet 30.0.2.45, Galaxy S26, Android 16) were
+   captured from real devices on BrowserStack over TCP only (TLS and HTTP/2).
+   ``samsung30_android`` has no HTTP/3 fingerprint. The QUIC/HTTP/3 fields of
+   ``safari27_ios`` are carried over from ``safari270_ios`` and are not verified
+   against iOS 27.
 
 Selecting HTTP/3
 ----------------
