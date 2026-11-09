@@ -358,3 +358,19 @@
   - CURL_IMPERSONATE: chrome157_macos
   - libcurl-impersonate
   - chrome157_macos
+- - curl_firefox159
+  - null
+  - null
+  - firefox159
+- - minicurl
+  - CURL_IMPERSONATE: firefox159
+  - libcurl-impersonate
+  - firefox159
+- - curl_firefox159_macos
+  - null
+  - null
+  - firefox159_macos
+- - minicurl
+  - CURL_IMPERSONATE: firefox159_macos
+  - libcurl-impersonate
+  - firefox159_macos

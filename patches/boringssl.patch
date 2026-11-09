@@ -226,7 +226,7 @@ index 6b3bb4506..58980e765 100644
  #if defined(__cplusplus)
  } /* extern C */
 diff --git a/include/openssl/ssl.h b/include/openssl/ssl.h
-index 5c6d17ad2..7cbeba838 100644
+index 5c6d17ad2..b0f248ede 100644
 --- a/include/openssl/ssl.h
 +++ b/include/openssl/ssl.h
 @@ -1732,6 +1732,18 @@ OPENSSL_EXPORT int SSL_CTX_set_strict_cipher_list(SSL_CTX *ctx,
@@ -257,10 +257,42 @@ index 5c6d17ad2..7cbeba838 100644
  
  // SSL_CTX_set1_group_ids sets the preferred groups for `ctx` to `group_ids`.
  // Each element of `group_ids` should be a unique one of the `SSL_GROUP_*`
-@@ -5536,6 +5550,12 @@ OPENSSL_EXPORT void SSL_CTX_set_permute_extensions(SSL_CTX *ctx, int enabled);
+@@ -4574,6 +4588,18 @@ OPENSSL_EXPORT const char *SSL_early_data_reason_string(
+ // ECH extension when no supported ECHConfig is available.
+ OPENSSL_EXPORT void SSL_set_enable_ech_grease(SSL *ssl, int enable);
+ 
++// curl-impersonate: SSL_set_ech_grease_payload_len sets the length of the
++// `payload` field (HPKE ciphertext, including the AEAD tag) of the GREASE ECH
++// extension. The extension body is then 42 + `len` bytes: type (1), kdf_id
++// (2), aead_id (2), config_id (1), enc (2 + 32) and payload (2 + `len`). For
++// example, `len` = 240 (224 bytes plus the 16-byte tag) gives 282 bytes, as
++// sent by Firefox. A non-zero `len` also draws the AEAD per connection from
++// AES-128-GCM and ChaCha20-Poly1305, as NSS does. If `len` is zero (the
++// default), a random length of 32 * [4, 7] plus the AEAD overhead is used and
++// the AEAD follows hardware AES support. `len` must not exceed 0xffff.
++OPENSSL_EXPORT void SSL_set_ech_grease_payload_len(SSL *ssl, size_t len);
++#define SSL_HAS_ECH_GREASE_PAYLOAD_LEN 1
++
+ // SSL_set1_ech_config_list configures `ssl` to, as a client, offer ECH with the
+ // specified configuration. `ech_config_list` should contain a serialized
+ // ECHConfigList structure. It returns one on success and zero on error.
+@@ -5536,6 +5562,25 @@ OPENSSL_EXPORT void SSL_CTX_set_permute_extensions(SSL_CTX *ctx, int enabled);
  // permute extensions. For now, this is only implemented for the ClientHello.
  OPENSSL_EXPORT void SSL_set_permute_extensions(SSL *ssl, int enabled);
  
++// curl-impersonate: SSL_CTX_set_permute_extensions_fixed_tail configures
++// extension permutation on `ctx` to keep the last `n` extensions of the order
++// (the explicit order set by `SSL_CTX_set_extension_order`, if any, else the
++// default one) in place, as NSS does for quic_transport_parameters and
++// encrypted_client_hello. Zero (the default) permutes all extensions.
++OPENSSL_EXPORT void SSL_CTX_set_permute_extensions_fixed_tail(SSL_CTX *ctx,
++                                                              uint8_t n);
++
++// curl-impersonate: SSL_set_permute_extensions_fixed_tail is like
++// `SSL_CTX_set_permute_extensions_fixed_tail` but for `ssl`.
++OPENSSL_EXPORT void SSL_set_permute_extensions_fixed_tail(SSL *ssl, uint8_t n);
++#define SSL_HAS_PERMUTE_EXTENSIONS_FIXED_TAIL 1
++
 +// curl-impersonate: See SSL_CTX_set_extension_order above.
 +OPENSSL_EXPORT int SSL_CTX_set_extension_order(SSL_CTX *ctx, char *order);
 +
@@ -270,7 +302,7 @@ index 5c6d17ad2..7cbeba838 100644
  // SSL_max_seal_overhead returns the maximum overhead, in bytes, of sealing a
  // record with `ssl`.
  OPENSSL_EXPORT size_t SSL_max_seal_overhead(const SSL *ssl);
-@@ -5863,6 +5883,33 @@ OPENSSL_EXPORT int SSL_CTX_set1_sigalgs_list(SSL_CTX *ctx, const char *str);
+@@ -5863,6 +5908,33 @@ OPENSSL_EXPORT int SSL_CTX_set1_sigalgs_list(SSL_CTX *ctx, const char *str);
  // more convenient to codesearch for specific algorithm values.
  OPENSSL_EXPORT int SSL_set1_sigalgs_list(SSL *ssl, const char *str);
  
@@ -304,7 +336,7 @@ index 5c6d17ad2..7cbeba838 100644
  #define SSL_set_app_data(s, arg) (SSL_set_ex_data(s, 0, (char *)(arg)))
  #define SSL_get_app_data(s) (SSL_get_ex_data(s, 0))
  #define SSL_SESSION_set_app_data(s, a) \
-@@ -6238,6 +6285,8 @@ OPENSSL_EXPORT int SSL_CTX_set_tlsext_status_arg(SSL_CTX *ctx, void *arg);
+@@ -6238,6 +6310,8 @@ OPENSSL_EXPORT int SSL_CTX_set_tlsext_status_arg(SSL_CTX *ctx, void *arg);
  #define SSL_CURVE_SECP384R1 SSL_GROUP_SECP384R1
  #define SSL_CURVE_SECP521R1 SSL_GROUP_SECP521R1
  #define SSL_CURVE_X25519 SSL_GROUP_X25519
@@ -396,8 +428,57 @@ index f4b348481..afb56f59b 100644
  #define TLS1_3_RFC_AES_128_GCM_SHA256 "TLS_AES_128_GCM_SHA256"
  #define TLS1_3_RFC_AES_256_GCM_SHA384 "TLS_AES_256_GCM_SHA384"
  #define TLS1_3_RFC_CHACHA20_POLY1305_SHA256 "TLS_CHACHA20_POLY1305_SHA256"
+diff --git a/ssl/encrypted_client_hello.cc b/ssl/encrypted_client_hello.cc
+index 46ba196f1..65ad28672 100644
+--- a/ssl/encrypted_client_hello.cc
++++ b/ssl/encrypted_client_hello.cc
+@@ -741,6 +741,13 @@ static bool setup_ech_grease(SSL_HANDSHAKE *hs) {
+                               : EVP_has_aes_hardware();
+   const EVP_HPKE_AEAD *aead =
+       has_aes_hw ? EVP_hpke_aes_128_gcm() : EVP_hpke_chacha20_poly1305();
++  // curl-impersonate: with a configured payload length (NSS/Firefox mode) the
++  // AEAD is drawn per connection from AES-128-GCM and ChaCha20-Poly1305, as
++  // NSS does. Both have a 16-byte tag, so the length is unchanged.
++  if (hs->config->ech_grease_payload_len != 0) {
++    aead = random_size(0, 1) ? EVP_hpke_chacha20_poly1305()
++                             : EVP_hpke_aes_128_gcm();
++  }
+   static_assert(ssl_grease_ech_config_id < sizeof(hs->grease_seed),
+                 "hs->grease_seed is too small");
+   uint8_t config_id = hs->grease_seed[ssl_grease_ech_config_id];
+@@ -764,8 +771,14 @@ static bool setup_ech_grease(SSL_HANDSHAKE *hs) {
+   // The server_name extension has an overhead of 9 bytes. For now, arbitrarily
+   // estimate maximum_name_length to be between 32 and 100 bytes. Then round up
+   // to a multiple of 32, to match RFC 9849, section 6.1.3.
++  //
++  // curl-impersonate: a configured length replaces the estimate. It already
++  // includes the AEAD overhead, so the extension body is 42 + payload_len
++  // bytes (see `SSL_set_ech_grease_payload_len`).
+   const size_t payload_len =
+-      32 * random_size(128 / 32, 224 / 32) + aead_overhead(aead);
++      hs->config->ech_grease_payload_len != 0
++          ? hs->config->ech_grease_payload_len
++          : 32 * random_size(128 / 32, 224 / 32) + aead_overhead(aead);
+   bssl::ScopedCBB cbb;
+   CBB enc_cbb, payload_cbb;
+   uint8_t *payload;
+@@ -901,6 +914,14 @@ void SSL_set_enable_ech_grease(SSL *ssl, int enable) {
+   ssl_impl->config->ech_grease_enabled = !!enable;
+ }
+ 
++void SSL_set_ech_grease_payload_len(SSL *ssl, size_t len) {
++  auto *ssl_impl = FromOpaque(ssl);
++  if (!ssl_impl->config) {
++    return;
++  }
++  ssl_impl->config->ech_grease_payload_len = len;
++}
++
+ int SSL_set1_ech_config_list(SSL *ssl, const uint8_t *ech_config_list,
+                              size_t ech_config_list_len) {
+   auto *ssl_impl = FromOpaque(ssl);
 diff --git a/ssl/extensions.cc b/ssl/extensions.cc
-index 022714a3f..a98640f9e 100644
+index 022714a3f..188deffd2 100644
 --- a/ssl/extensions.cc
 +++ b/ssl/extensions.cc
 @@ -701,8 +701,10 @@ static bool ext_ri_add_clienthello(const SSL_HANDSHAKE *hs, CBB *out,
@@ -570,7 +651,7 @@ index 022714a3f..a98640f9e 100644
      {
          TLSEXT_TYPE_application_settings_old,
          ext_alps_add_clienthello_old,
-@@ -4320,12 +4400,23 @@ bool ssl_setup_extension_permutation(SSL_HANDSHAKE *hs) {
+@@ -4320,14 +4400,36 @@ bool ssl_setup_extension_permutation(SSL_HANDSHAKE *hs) {
                  "extensions_permutation type is too small");
    uint32_t seeds[kNumExtensions - 1];
    Array<uint8_t> permutation;
@@ -596,9 +677,23 @@ index 022714a3f..a98640f9e 100644
 +      return false;
 +    }
    }
-   for (size_t i = kNumExtensions - 1; i > 0; i--) {
+-  for (size_t i = kNumExtensions - 1; i > 0; i--) {
++  // curl-impersonate: keep the last `permute_extensions_fixed_tail`
++  // extensions of the order in place by only shuffling the slots before them.
++  // Placeholders for omitted extensions do not count.
++  size_t num_shuffled = kNumExtensions;
++  for (size_t fixed = hs->config->permute_extensions_fixed_tail;
++       fixed > 0 && num_shuffled > 0;) {
++    num_shuffled--;
++    if (permutation[num_shuffled] != 255) {
++      fixed--;
++    }
++  }
++  for (size_t i = num_shuffled; i-- > 1;) {
      // Set element `i` to a randomly-selected element 0 <= j <= i.
-@@ -4348,6 +4439,90 @@ static const struct tls_extension *tls_extension_find(uint32_t *out_index,
+     std::swap(permutation[i], permutation[seeds[i - 1] % (i + 1)]);
+   }
+@@ -4348,6 +4450,90 @@ static const struct tls_extension *tls_extension_find(uint32_t *out_index,
    return nullptr;
  }
  
@@ -689,7 +784,7 @@ index 022714a3f..a98640f9e 100644
  static bool add_padding_extension(CBB *cbb, uint16_t ext, size_t len) {
    CBB child;
    if (!CBB_add_u16(cbb, ext) ||  //
-@@ -4393,6 +4568,7 @@ static bool ssl_add_clienthello_tlsext_inner(SSL_HANDSHAKE *hs, CBB *out,
+@@ -4393,6 +4579,7 @@ static bool ssl_add_clienthello_tlsext_inner(SSL_HANDSHAKE *hs, CBB *out,
      size_t i = hs->extension_permutation.empty()
                     ? unpermuted
                     : hs->extension_permutation[unpermuted];
@@ -697,7 +792,7 @@ index 022714a3f..a98640f9e 100644
      const size_t len_before = CBB_len(&extensions);
      const size_t len_compressed_before = CBB_len(compressed.get());
      if (!kExtensions[i].add_clienthello(hs, &extensions, compressed.get(),
-@@ -4506,6 +4682,7 @@ bool ssl_add_clienthello_tlsext(SSL_HANDSHAKE *hs, CBB *out, CBB *out_encoded,
+@@ -4506,6 +4693,7 @@ bool ssl_add_clienthello_tlsext(SSL_HANDSHAKE *hs, CBB *out, CBB *out_encoded,
      size_t i = hs->extension_permutation.empty()
                     ? unpermuted
                     : hs->extension_permutation[unpermuted];
@@ -893,7 +988,7 @@ index a4a53cda6..828ce83db 100644
      CBB child;
      if (!CBB_add_u8_length_prefixed(&body, &child)) {
 diff --git a/ssl/internal.h b/ssl/internal.h
-index 30b2269ad..a60564a6e 100644
+index 30b2269ad..afcd74c9f 100644
 --- a/ssl/internal.h
 +++ b/ssl/internal.h
 @@ -217,10 +217,11 @@ BSSL_NAMESPACE_BEGIN
@@ -988,7 +1083,7 @@ index 30b2269ad..a60564a6e 100644
    // srtp_profiles is the list of configured SRTP protection profiles for
    // DTLS-SRTP.
    UniquePtr<STACK_OF(SRTP_PROTECTION_PROFILE)> srtp_profiles;
-@@ -3532,6 +3559,14 @@ struct SSL_CONFIG {
+@@ -3532,6 +3559,22 @@ struct SSL_CONFIG {
    // hardware support, and use the value in aes_hw_override_value instead.
    bool aes_hw_override : 1;
  
@@ -1000,10 +1095,18 @@ index 30b2269ad..a60564a6e 100644
 +  // send.
 +  uint8_t key_shares_limit = 0;
 +
++  // curl-impersonate: permute_extensions_fixed_tail is the number of trailing
++  // extensions kept in place when permuting extensions.
++  uint8_t permute_extensions_fixed_tail = 0;
++
++  // curl-impersonate: ech_grease_payload_len, if non-zero, is the length of
++  // the GREASE ECH payload, including the AEAD overhead.
++  size_t ech_grease_payload_len = 0;
++
    // aes_hw_override_value is used for testing to indicate the support or lack
    // of support for AES hw. The value is only considered if `aes_hw_override` is
    // true.
-@@ -3913,6 +3948,15 @@ class SSLContext : public ssl_ctx_st, public RefCounted<SSLContext> {
+@@ -3913,6 +3956,15 @@ class SSLContext : public ssl_ctx_st, public RefCounted<SSLContext> {
  
    UniquePtr<SSLCipherPreferenceList> cipher_list;
  
@@ -1019,7 +1122,7 @@ index 30b2269ad..a60564a6e 100644
    X509_STORE *cert_store = nullptr;
    LHASH_OF(SSL_SESSION) *sessions = nullptr;
    // Most session-ids that will be cached, default is
-@@ -4147,6 +4191,10 @@ class SSLContext : public ssl_ctx_st, public RefCounted<SSLContext> {
+@@ -4147,6 +4199,10 @@ class SSLContext : public ssl_ctx_st, public RefCounted<SSLContext> {
    // available_client_cert_types inherited by SSL struct.
    InplaceVector<uint8_t, kNumCertTypes> available_client_cert_types;
  
@@ -1030,7 +1133,7 @@ index 30b2269ad..a60564a6e 100644
    // retain_only_sha256_of_client_certs is true if we should compute the SHA256
    // hash of the peer's certificate and then discard it to save memory and
    // session space. Only effective on the server side.
-@@ -4208,6 +4256,13 @@ class SSLContext : public ssl_ctx_st, public RefCounted<SSLContext> {
+@@ -4208,6 +4264,17 @@ class SSLContext : public ssl_ctx_st, public RefCounted<SSLContext> {
    // signal its sessions may be resumed across names in the server certificate.
    bool resumption_across_names_enabled : 1;
  
@@ -1040,6 +1143,10 @@ index 30b2269ad..a60564a6e 100644
 +  // curl-impersonate: key_shares_limit is the maximum number of initial key
 +  // shares to send.
 +  uint8_t key_shares_limit = 0;
++
++  // curl-impersonate: permute_extensions_fixed_tail is the number of trailing
++  // extensions kept in place when permuting extensions.
++  uint8_t permute_extensions_fixed_tail = 0;
 +
   private:
    friend RefCounted;
@@ -1326,16 +1433,18 @@ index 5923110e7..f50079930 100644
  
  static_assert(std::size(kNamedGroups) == kNumNamedGroups,
 diff --git a/ssl/ssl_lib.cc b/ssl/ssl_lib.cc
-index e05f91bd9..ff0d1021c 100644
+index e05f91bd9..e9a49b730 100644
 --- a/ssl/ssl_lib.cc
 +++ b/ssl/ssl_lib.cc
-@@ -530,6 +530,17 @@ SSL *SSL_new(SSL_CTX *ctx) {
+@@ -530,6 +530,19 @@ SSL *SSL_new(SSL_CTX *ctx) {
    ssl->config->aes_hw_override = ctx_impl->aes_hw_override;
    ssl->config->aes_hw_override_value = ctx_impl->aes_hw_override_value;
    ssl->config->compliance_policy = ctx_impl->compliance_policy;
 +  ssl->config->key_usage_check_enabled = ctx_impl->key_usage_check_enabled;
 +  ssl->config->record_size_limit = ctx_impl->record_size_limit;
 +  ssl->config->key_shares_limit = ctx_impl->key_shares_limit;
++  ssl->config->permute_extensions_fixed_tail =
++      ctx_impl->permute_extensions_fixed_tail;
 +
 +  if (ctx_impl->cipher_order != nullptr) {
 +    ssl->config->cipher_order.reset(
@@ -1347,7 +1456,7 @@ index e05f91bd9..ff0d1021c 100644
  
    if (!ssl->config->supported_group_list.CopyFrom(
            ctx_impl->supported_group_list) ||
-@@ -538,6 +549,9 @@ SSL *SSL_new(SSL_CTX *ctx) {
+@@ -538,6 +551,9 @@ SSL *SSL_new(SSL_CTX *ctx) {
        !ssl->config->alpn_client_proto_list.CopyFrom(
            ctx_impl->alpn_client_proto_list) ||
        !ssl->config->verify_sigalgs.CopyFrom(ctx_impl->verify_sigalgs) ||
@@ -1357,7 +1466,7 @@ index e05f91bd9..ff0d1021c 100644
        !ssl->config->accepted_peer_cert_types.TryCopyFrom(
            ctx_impl->accepted_peer_cert_types) ||
        !ssl->config->available_client_cert_types.TryCopyFrom(
-@@ -2206,22 +2220,31 @@ const char *SSL_get_cipher_list(const SSL *ssl, int n) {
+@@ -2206,22 +2222,31 @@ const char *SSL_get_cipher_list(const SSL *ssl, int n) {
    return c->name;
  }
  
@@ -1398,7 +1507,7 @@ index e05f91bd9..ff0d1021c 100644
  }
  
  int SSL_set_cipher_list(SSL *ssl, const char *str) {
-@@ -2313,6 +2336,30 @@ void SSL_enable_ocsp_stapling(SSL *ssl) {
+@@ -2313,6 +2338,30 @@ void SSL_enable_ocsp_stapling(SSL *ssl) {
    ssl_impl->config->ocsp_stapling_enabled = true;
  }
  
@@ -1429,7 +1538,7 @@ index e05f91bd9..ff0d1021c 100644
  void SSL_get0_signed_cert_timestamp_list(const SSL *ssl, const uint8_t **out,
                                           size_t *out_len) {
    SSL_SESSION *session = SSL_get_session(ssl);
-@@ -3281,6 +3328,21 @@ void SSL_CTX_set_permute_extensions(SSL_CTX *ctx, int enabled) {
+@@ -3281,6 +3330,21 @@ void SSL_CTX_set_permute_extensions(SSL_CTX *ctx, int enabled) {
    FromOpaque(ctx)->permute_extensions = !!enabled;
  }
  
@@ -1451,6 +1560,25 @@ index e05f91bd9..ff0d1021c 100644
  void SSL_set_permute_extensions(SSL *ssl, int enabled) {
    auto *ssl_impl = FromOpaque(ssl);
    if (!ssl_impl->config) {
+@@ -3289,6 +3353,18 @@ void SSL_set_permute_extensions(SSL *ssl, int enabled) {
+   ssl_impl->config->permute_extensions = !!enabled;
+ }
+ 
++void SSL_CTX_set_permute_extensions_fixed_tail(SSL_CTX *ctx, uint8_t n) {
++  FromOpaque(ctx)->permute_extensions_fixed_tail = n;
++}
++
++void SSL_set_permute_extensions_fixed_tail(SSL *ssl, uint8_t n) {
++  auto *ssl_impl = FromOpaque(ssl);
++  if (!ssl_impl->config) {
++    return;
++  }
++  ssl_impl->config->permute_extensions_fixed_tail = n;
++}
++
+ int32_t SSL_get_ticket_age_skew(const SSL *ssl) {
+   return FromOpaque(ssl)->s3->ticket_age_skew;
+ }
 diff --git a/ssl/ssl_privkey.cc b/ssl/ssl_privkey.cc
 index ae7c9bbd5..22c96202b 100644
 --- a/ssl/ssl_privkey.cc
@@ -1506,10 +1634,18 @@ index ae7c9bbd5..22c96202b 100644
 +                          MakeConstSpan(sigalgs.data(), sigalgs.size()));
 +}
 diff --git a/ssl/ssl_test.cc b/ssl/ssl_test.cc
-index f9ba6a9b6..38ef2838c 100644
+index f9ba6a9b6..b48896fcd 100644
 --- a/ssl/ssl_test.cc
 +++ b/ssl/ssl_test.cc
-@@ -10027,6 +10027,57 @@ static bool GetExtensionOrder(SSL_CTX *client_ctx, std::vector<uint16_t> *out,
+@@ -21,6 +21,7 @@
+ #include <algorithm>
+ #include <iterator>
+ #include <limits>
++#include <set>
+ #include <string>
+ #include <utility>
+ #include <vector>
+@@ -10027,6 +10028,168 @@ static bool GetExtensionOrder(SSL_CTX *client_ctx, std::vector<uint16_t> *out,
    return app_data.callback_done;
  }
  
@@ -1562,6 +1698,117 @@ index f9ba6a9b6..38ef2838c 100644
 +  SSL_CTX_set_permute_extensions(ctx.get(), 0);
 +  ASSERT_TRUE(GetExtensionOrder(ctx.get(), &order, nullptr, false));
 +  EXPECT_EQ(order, fixed_order);
++}
++
++// curl-impersonate: test that SSL_CTX_set_permute_extensions_fixed_tail keeps
++// the last extensions of the explicit order in place while permuting the rest.
++TEST(SSLTest, PermuteExtensionsFixedTail) {
++  bssl::UniquePtr<SSL_CTX> ctx(SSL_CTX_new(TLS_method()));
++  ASSERT_TRUE(ctx);
++  ASSERT_TRUE(SSL_CTX_set_min_proto_version(ctx.get(), TLS1_3_VERSION));
++
++  char extension_order[] = "43-51-10-45-13-23-65281";
++  ASSERT_TRUE(SSL_CTX_set_extension_order(ctx.get(), extension_order));
++  std::vector<uint16_t> order;
++  ASSERT_TRUE(GetExtensionOrder(ctx.get(), &order, nullptr, false));
++  ASSERT_EQ(order.size(), 7u);
++  const auto fixed_order = order;
++  std::vector<uint16_t> sorted_head(order.begin(), order.end() - 2);
++  std::sort(sorted_head.begin(), sorted_head.end());
++
++  SSL_CTX_set_permute_extensions(ctx.get(), 1);
++  SSL_CTX_set_permute_extensions_fixed_tail(ctx.get(), 2);
++  bool changed = false;
++  // Five permuted extensions give a false negative probability of
++  // (1/120)^14 < 2^-96.
++  for (int i = 0; i < 14; i++) {
++    ASSERT_TRUE(GetExtensionOrder(ctx.get(), &order, nullptr, false));
++    ASSERT_EQ(order.size(), 7u);
++    EXPECT_THAT(Span(order).subspan(5),
++                ElementsAre(TLSEXT_TYPE_extended_master_secret,
++                            TLSEXT_TYPE_renegotiate));
++    std::vector<uint16_t> head(order.begin(), order.end() - 2);
++    changed |= head != std::vector<uint16_t>(fixed_order.begin(),
++                                             fixed_order.end() - 2);
++    std::sort(head.begin(), head.end());
++    EXPECT_EQ(head, sorted_head);
++  }
++  EXPECT_TRUE(changed) << "Extensions before the fixed tail were not permuted";
++
++  // A tail covering every extension disables the permutation.
++  SSL_CTX_set_permute_extensions_fixed_tail(ctx.get(), 7);
++  ASSERT_TRUE(GetExtensionOrder(ctx.get(), &order, nullptr, false));
++  EXPECT_EQ(order, fixed_order);
++  SSL_CTX_set_permute_extensions_fixed_tail(ctx.get(), 255);
++  ASSERT_TRUE(GetExtensionOrder(ctx.get(), &order, nullptr, false));
++  EXPECT_EQ(order, fixed_order);
++}
++
++// curl-impersonate: test that SSL_set_ech_grease_payload_len fixes the length
++// of the GREASE ECH extension to 42 + `len` bytes, and that zero keeps the
++// default random length.
++TEST(SSLTest, ECHGreasePayloadLen) {
++  bssl::UniquePtr<SSL_CTX> ctx(SSL_CTX_new(TLS_method()));
++  ASSERT_TRUE(ctx);
++  auto get_ech_len = [&](size_t payload_len, size_t *out_len,
++                         uint16_t *out_aead = nullptr) -> bool {
++    bssl::UniquePtr<SSL> ssl(SSL_new(ctx.get()));
++    if (!ssl) {
++      return false;
++    }
++    SSL_set_enable_ech_grease(ssl.get(), 1);
++    SSL_set_ech_grease_payload_len(ssl.get(), payload_len);
++    SSL_set_connect_state(ssl.get());
++    std::vector<uint8_t> client_hello;
++    if (!GetClientHello(ssl.get(), &client_hello)) {
++      return false;
++    }
++    auto body = Span(client_hello)
++                    .subspan(SSL3_RT_HEADER_LENGTH + SSL3_HM_HEADER_LENGTH);
++    SSL_CLIENT_HELLO parsed;
++    const uint8_t *data;
++    if (!SSL_parse_client_hello(ssl.get(), &parsed, body.data(),
++                                body.size()) ||
++        !SSL_early_callback_ctx_extension_get(
++            &parsed, TLSEXT_TYPE_encrypted_client_hello, &data, out_len) ||
++        *out_len < 5) {
++      return false;
++    }
++    if (out_aead != nullptr) {
++      *out_aead = static_cast<uint16_t>((data[3] << 8) | data[4]);
++    }
++    return true;
++  };
++
++  size_t len;
++  ASSERT_TRUE(get_ech_len(240, &len));
++  EXPECT_EQ(len, 282u);  // Firefox
++
++  // A configured length draws the AEAD from AES-128-GCM and ChaCha20-Poly1305
++  // (NSS); the length does not depend on the draw.
++  std::set<uint16_t> aeads;
++  for (int i = 0; i < 64; i++) {
++    uint16_t aead;
++    ASSERT_TRUE(get_ech_len(240, &len, &aead));
++    EXPECT_EQ(len, 282u);
++    aeads.insert(aead);
++  }
++  EXPECT_EQ(aeads, (std::set<uint16_t>{EVP_HPKE_AES_128_GCM,
++                                       EVP_HPKE_CHACHA20_POLY1305}));
++  ASSERT_TRUE(get_ech_len(1, &len));
++  EXPECT_EQ(len, 43u);
++
++  // Zero keeps 32 * [4, 7] bytes plus the 16-byte AEAD tag.
++  std::vector<size_t> lens;
++  for (int i = 0; i < 32; i++) {
++    ASSERT_TRUE(get_ech_len(0, &len));
++    ASSERT_GE(len, 42u + 128u + 16u);
++    EXPECT_LE(len, 42u + 224u + 16u);
++    EXPECT_EQ((len - 42u - 16u) % 32u, 0u);
++    lens.push_back(len);
++  }
++  std::sort(lens.begin(), lens.end());
++  EXPECT_NE(lens.front(), lens.back()) << "GREASE ECH length is not random";
 +}
 +
  // Test that, when extension permutation is enabled, the ClientHello extension

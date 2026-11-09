@@ -79,6 +79,39 @@ def test_generated_protocols(profile):
     assert signature["http3"]["settings"] == "1:65536;7:100;GREASE"
 
 
+def test_preset_engine_fields(profile):
+    fp = profile["fingerprint"]
+    fp.update({"http_version": "v2", "tls_version": "1.2"})
+    preset = generator.render_preset(profile, "example", 32)
+    # Unset fields keep existing presets byte-identical.
+    for key in ("header_engine", "ech_grease_len", "tls_permute_fixed_tail",
+                "http3_grease_frame", "http3_tls_permute_extensions",
+                "http2_initial_stream_id", "http2_stream_window_update",
+                "quic_cid_length", "quic_initial_packet_number",
+                "http3_cert_compression", "quic_tp_fixed_order"):
+        assert f".{key} =" not in preset
+    fp.update({
+        "header_engine": "gecko", "http2_initial_stream_id": 3,
+        "http2_stream_window_update": 12451840, "ech_grease_len": 240,
+        "http3_grease_frame": True, "tls_permute_fixed_tail": 2,
+        "http3_tls_permute_extensions": True, "quic_cid_length": "firefox",
+        "quic_initial_packet_number": -1,
+        "http3_tls_cert_compression": ["zlib", "zstd", "brotli"],
+        "quic_tp_fixed_order": True,
+    })
+    preset = generator.render_preset(profile, "example", 32)
+    for line in (
+        '.header_engine = "gecko",', ".http2_initial_stream_id = 3,",
+        ".http2_stream_window_update = 12451840,", ".ech_grease_len = 240,",
+        ".http3_grease_frame = true,", ".tls_permute_fixed_tail = 2,",
+        ".http3_tls_permute_extensions = true,",
+        '.quic_cid_length = "firefox",', ".quic_initial_packet_number = -1,",
+        '.http3_cert_compression = "zlib,zstd,brotli",',
+        ".quic_tp_fixed_order = true,",
+    ):
+        assert f"    {line}" in preset
+
+
 def test_partial_tls_matches_capture(profile, tls_capture):
     expected = generator.render_tls_signature(profile["fingerprint"])
     actual = TLSClientHelloSignature.from_dict(tls_capture)
@@ -125,6 +158,28 @@ def test_http3_normalization_and_mismatch(profile, suffix, header_format):
     actual["http3"]["perk_text_normalized"] = actual["http3"]["perk_text_normalized"].replace("4:15728640", "4:1")
     with pytest.raises(AssertionError):
         _assert_http3_signature(actual, expected)
+
+
+@pytest.mark.parametrize("versions", ["1,GREASE,1798521807", "1,1798521807,GREASE"])
+def test_http3_endpoint_grease_rendering(versions):
+    """Option syntax vs the endpoint: reserved ids, empty values, version list."""
+    expected = {
+        "settings": "1:65536", "pseudo_headers_order": "mpas", "headers": {},
+        "quic_transport_parameters": "1:30000;15:AUTO;17:1@GREASE,0x6b3343cf,1;29;4278378010:0x43e8",
+    }
+    transport = f"1:30000;15:AUTO;17:1@{versions};29:0x;GREASE"
+    actual = {"http3": {"perk_text_normalized": f"1:65536|m,p,a,s|{transport}", "headers": {}}}
+    _assert_http3_signature(actual, expected)
+    for wrong in (
+        transport.replace("1798521807", "1798521806"),
+        transport.replace("1@1,", "1@"),
+        transport + ";GREASE",
+        transport.replace(";29:0x", ""),
+        transport.replace("29:0x", "29:0x00"),
+    ):
+        actual["http3"]["perk_text_normalized"] = f"1:65536|m,p,a,s|{wrong}"
+        with pytest.raises(AssertionError):
+            _assert_http3_signature(actual, expected)
 
 
 @pytest.mark.parametrize("header_format", ["mapping", "list"])

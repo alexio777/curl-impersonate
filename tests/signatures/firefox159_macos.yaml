@@ -1,0 +1,125 @@
+browser:
+  name: firefox
+  version: '159'
+  os: macos_26.0
+  target: firefox159_macos
+signature:
+  options:
+    tls_permute_extensions: false
+  http2:
+    frames:
+    - frame_type: SETTINGS
+      settings:
+      - key: 1
+        value: 65536
+      - key: 2
+        value: 0
+      - key: 4
+        value: 131072
+      - key: 5
+        value: 16384
+      stream_id: 0
+    - frame_type: WINDOW_UPDATE
+      stream_id: 0
+      window_size_increment: 12517377
+    - frame_type: HEADERS
+      stream_id: 1
+      headers:
+      - 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:159.0) Gecko/20100101
+        Firefox/159.0'
+      - 'accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+      - 'accept-language: en-US,en;q=0.9'
+      - 'accept-encoding: gzip, deflate, br, zstd'
+      - 'upgrade-insecure-requests: 1'
+      - 'sec-fetch-dest: document'
+      - 'sec-fetch-mode: navigate'
+      - 'sec-fetch-site: none'
+      - 'sec-fetch-user: ?1'
+      - 'priority: u=0, i'
+      - 'te: trailers'
+      pseudo_headers:
+      - :method
+      - :path
+      - :authority
+      - :scheme
+  tls_client_hello:
+    partial: true
+    ciphersuites:
+    - 4865
+    - 4867
+    - 4866
+    - 49195
+    - 49199
+    - 52393
+    - 52392
+    - 49196
+    - 49200
+    - 49171
+    - 49172
+    - 156
+    - 157
+    - 47
+    - 53
+    extensions:
+    - type: server_name
+    - type: extended_master_secret
+    - type: renegotiation_info
+    - type: supported_groups
+      supported_groups:
+      - 4588
+      - 29
+      - 23
+      - 24
+      - 25
+    - type: ec_point_formats
+    - type: session_ticket
+    - type: application_layer_protocol_negotiation
+    - type: status_request
+    - type: delegated_credentials
+      sig_hash_algs:
+      - 1027
+      - 1283
+      - 1539
+      - 515
+    - type: signed_certificate_timestamp
+    - type: keyshare
+    - type: supported_versions
+    - type: signature_algorithms
+      sig_hash_algs:
+      - 1027
+      - 1283
+      - 1539
+      - 2052
+      - 2053
+      - 2054
+      - 1025
+      - 1281
+      - 1537
+      - 515
+      - 513
+    - type: psk_key_exchange_modes
+    - type: record_size_limit
+      record_size_limit: 16385
+    - type: compress_certificate
+      algorithms:
+      - 1
+      - 2
+      - 3
+    - type: encrypted_client_hello
+    grease: false
+  http3:
+    settings: 1:65536;7:20;727725890:0;16765559:1;51:1;8:1
+    pseudo_headers_order: msap
+    quic_transport_parameters: 1:30000;4:25165824;5:12582912;6:1048576;7:1048576;8:100;9:100;11:20;14:8;15:AUTO;17:1@GREASE,0x6b3343cf,1;29;4278378010:0x43e8;32:65535
+    headers:
+      user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:159.0) Gecko/20100101
+        Firefox/159.0
+      accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+      accept-language: en-US,en;q=0.9
+      accept-encoding: gzip, deflate, br, zstd
+      upgrade-insecure-requests: '1'
+      sec-fetch-dest: document
+      sec-fetch-mode: navigate
+      sec-fetch-site: none
+      sec-fetch-user: ?1
+      priority: u=0, i

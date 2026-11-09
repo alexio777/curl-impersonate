@@ -163,6 +163,7 @@ def render_preset(profile, target, limit):
         ("tls_signature_hashes", "sig_hash_algs", ":"),
         ("http3_tls_signature_hashes", "http3_sig_hash_algs", ":"),
         ("tls_cert_compression", "cert_compression", ","),
+        ("http3_tls_cert_compression", "http3_cert_compression", ","),
         ("tls_delegated_credentials", "tls_delegated_credentials", ":"),
         ("tls_trust_anchors", "tls_trust_anchors", ","),
     ):
@@ -185,7 +186,12 @@ def render_preset(profile, target, limit):
         "http2_settings", "http2_window_update", "http2_pseudo_headers_order",
         "http2_no_priority", "http3_settings", "http3_pseudo_headers_order",
         "http3_tls_extension_order", "quic_transport_parameters",
-        "split_cookies", "form_boundary",
+        "split_cookies", "form_boundary", "quic_cid_length",
+        "quic_initial_packet_number",
+        "http3_tls_permute_extensions", "tls_permute_fixed_tail",
+        "header_engine", "http2_initial_stream_id",
+        "http2_stream_window_update", "ech_grease_len", "http3_grease_frame",
+        "quic_tp_fixed_order",
     ):
         if key in fp:
             value = fp[key]

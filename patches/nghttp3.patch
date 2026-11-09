@@ -1,11 +1,15 @@
 diff --git a/lib/includes/nghttp3/nghttp3.h b/lib/includes/nghttp3/nghttp3.h
-index c38f5e8..62c2c70 100644
+index c38f5e8..5686520 100644
 --- a/lib/includes/nghttp3/nghttp3.h
 +++ b/lib/includes/nghttp3/nghttp3.h
-@@ -1741,6 +1741,53 @@ typedef struct nghttp3_conn nghttp3_conn;
+@@ -1739,7 +1739,55 @@ typedef struct nghttp3_conn nghttp3_conn;
+ #define NGHTTP3_SETTINGS_V2 2
+ #define NGHTTP3_SETTINGS_V3 3
  #define NGHTTP3_SETTINGS_V4 4
- #define NGHTTP3_SETTINGS_VERSION NGHTTP3_SETTINGS_V4
- 
+-#define NGHTTP3_SETTINGS_VERSION NGHTTP3_SETTINGS_V4
++#define NGHTTP3_SETTINGS_V5 5
++#define NGHTTP3_SETTINGS_VERSION NGHTTP3_SETTINGS_V5
++
 +/**
 + * @macro
 + *
@@ -52,11 +56,39 @@ index c38f5e8..62c2c70 100644
 +  uint64_t id;
 +  uint64_t value;
 +} nghttp3_settings_entry;
-+
+ 
  /**
   * @struct
-  *
-@@ -2412,6 +2459,33 @@ NGHTTP3_EXTERN int nghttp3_conn_bind_qpack_streams(nghttp3_conn *conn,
+@@ -1830,8 +1878,28 @@ typedef struct nghttp3_settings {
+    * v1.13.0.
+    */
+   nghttp3_qpack_indexing_strat qpack_indexing_strat;
++  /* The following fields have been added since NGHTTP3_SETTINGS_V5. */
++  /**
++   * :member:`grease_frame`, if set to nonzero, makes the local
++   * endpoint send one frame of a reserved type (0x1f * N + 0x21, see
++   * :rfc:`9114#section-7.2.8`) with a random payload of 0 to 7 bytes
++   * right after the SETTINGS frame on the control stream, as Firefox
++   * does.  N and the payload are drawn from
++   * :member:`nghttp3_callbacks.rand`, which should be set; without it
++   * a weak address-based seed is used.  This field is a
++   * curl-impersonate extension.
++   */
++  int grease_frame;
+ } nghttp3_settings;
+ 
++/**
++ * @macro
++ *
++ * :macro:`NGHTTP3_HAS_GREASE_FRAME` is defined if
++ * :member:`nghttp3_settings.grease_frame` is available.
++ */
++#define NGHTTP3_HAS_GREASE_FRAME 1
++
+ #define NGHTTP3_PROTO_SETTINGS_V1 1
+ #define NGHTTP3_PROTO_SETTINGS_VERSION NGHTTP3_PROTO_SETTINGS_V1
+ 
+@@ -2412,6 +2480,33 @@ NGHTTP3_EXTERN int nghttp3_conn_bind_qpack_streams(nghttp3_conn *conn,
                                                     int64_t qenc_stream_id,
                                                     int64_t qdec_stream_id);
  
@@ -91,7 +123,7 @@ index c38f5e8..62c2c70 100644
   * @function
   *
 diff --git a/lib/nghttp3_conn.c b/lib/nghttp3_conn.c
-index a305be2..0c2d4f3 100644
+index a305be2..4a9f7e6 100644
 --- a/lib/nghttp3_conn.c
 +++ b/lib/nghttp3_conn.c
 @@ -438,6 +438,7 @@ void nghttp3_conn_del(nghttp3_conn *conn) {
@@ -102,7 +134,67 @@ index a305be2..0c2d4f3 100644
    nghttp3_mem_free(conn->mem, conn->rx.originbuf);
  
    nghttp3_mem_free(conn->mem, conn);
-@@ -2172,6 +2173,13 @@ int nghttp3_conn_bind_control_stream(nghttp3_conn *conn, int64_t stream_id) {
+@@ -2140,6 +2141,59 @@ nghttp3_stream *nghttp3_conn_find_stream(nghttp3_conn *conn,
+   return nghttp3_map_find(&conn->streams, (nghttp3_map_key_type)stream_id);
+ }
+ 
++/*
++ * conn_grease_rand fills |dest| of length |destlen| with random bytes
++ * from the rand callback.  Without the callback, it falls back to
++ * splitmix64 seeded by heap and stack addresses, which only varies as
++ * much as ASLR does.
++ */
++static void conn_grease_rand(nghttp3_conn *conn, uint8_t *dest,
++                             size_t destlen) {
++  uint64_t x, z;
++
++  if (conn->callbacks.rand) {
++    conn->callbacks.rand(dest, destlen);
++    return;
++  }
++
++  x = (uint64_t)(uintptr_t)conn ^ ((uint64_t)(uintptr_t)&x << 17);
++
++  for (; destlen; --destlen) {
++    x += 0x9e3779b97f4a7c15ULL;
++    z = x;
++    z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ULL;
++    z = (z ^ (z >> 27)) * 0x94d049bb133111ebULL;
++    *dest++ = (uint8_t)(z ^ (z >> 31));
++  }
++}
++
++/*
++ * conn_init_grease_frame initializes |fr| as a frame of a random
++ * reserved type 0x1f * N + 0x21 with a random payload of 0 to
++ * NGHTTP3_GREASE_FRAME_MAX_PAYLOADLEN bytes, like Firefox.
++ */
++static void conn_init_grease_frame(nghttp3_conn *conn,
++                                   nghttp3_frame_grease *fr) {
++  uint8_t rnd[9];
++  uint64_t n = 0;
++  size_t i;
++
++  conn_grease_rand(conn, rnd, sizeof(rnd));
++
++  for (i = 0; i < 8; ++i) {
++    n = (n << 8) | rnd[i];
++  }
++
++  *fr = (nghttp3_frame_grease){
++    .type = NGHTTP3_FRAME_GREASE,
++    .grease_type =
++      (int64_t)(0x1f * (n % (NGHTTP3_GREASE_FRAME_N_MAX + 1)) + 0x21),
++    .payloadlen = rnd[8] % (NGHTTP3_GREASE_FRAME_MAX_PAYLOADLEN + 1),
++  };
++
++  conn_grease_rand(conn, fr->payload, fr->payloadlen);
++}
++
+ int nghttp3_conn_bind_control_stream(nghttp3_conn *conn, int64_t stream_id) {
+   nghttp3_stream *stream;
+   nghttp3_frame fr;
+@@ -2172,12 +2226,28 @@ int nghttp3_conn_bind_control_stream(nghttp3_conn *conn, int64_t stream_id) {
      .type = NGHTTP3_FRAME_SETTINGS,
      .local_settings = &conn->local.settings,
    };
@@ -116,7 +208,22 @@ index a305be2..0c2d4f3 100644
  
    rv = nghttp3_stream_frq_add(stream, &fr);
    if (rv != 0) {
-@@ -2195,6 +2203,41 @@ int nghttp3_conn_bind_control_stream(nghttp3_conn *conn, int64_t stream_id) {
+     return rv;
+   }
+ 
++  if (conn->local.settings.grease_frame) {
++    conn_init_grease_frame(conn, &fr.grease);
++
++    rv = nghttp3_stream_frq_add(stream, &fr);
++    if (rv != 0) {
++      return rv;
++    }
++  }
++
+   if (conn->local.settings.origin_list) {
+     assert(conn->server);
+ 
+@@ -2195,6 +2265,41 @@ int nghttp3_conn_bind_control_stream(nghttp3_conn *conn, int64_t stream_id) {
    return 0;
  }
  
@@ -175,10 +282,28 @@ index 4f7f68f..26ca444 100644
      struct {
        /* max_pushes is the number of push IDs that local endpoint can
 diff --git a/lib/nghttp3_frame.h b/lib/nghttp3_frame.h
-index a8b706a..948e539 100644
+index a8b706a..1519960 100644
 --- a/lib/nghttp3_frame.h
 +++ b/lib/nghttp3_frame.h
-@@ -71,22 +71,11 @@ typedef struct nghttp3_frame_headers {
+@@ -46,6 +46,17 @@
+ #define NGHTTP3_FRAME_PRIORITY_UPDATE_PUSH_ID 0x0f0701
+ /* ORIGIN: https://datatracker.ietf.org/doc/html/rfc9412 */
+ #define NGHTTP3_FRAME_ORIGIN 0x0c
++/* curl-impersonate: NGHTTP3_FRAME_GREASE marks a queued frame of a
++   reserved type (0x1f * N + 0x21, RFC 9114, section 7.2.8).  It is
++   only used in the send queue; the type on the wire is
++   nghttp3_frame_grease.grease_type. */
++#define NGHTTP3_FRAME_GREASE 0x21
++/* NGHTTP3_GREASE_FRAME_N_MAX is the largest N such that the reserved
++   frame type 0x1f * N + 0x21 fits in a varint. */
++#define NGHTTP3_GREASE_FRAME_N_MAX ((NGHTTP3_VARINT_MAX - 0x21) / 0x1f)
++/* NGHTTP3_GREASE_FRAME_MAX_PAYLOADLEN is the maximum length of a
++   reserved frame payload. */
++#define NGHTTP3_GREASE_FRAME_MAX_PAYLOADLEN 7
+ 
+ /* Frame types that are reserved for HTTP/2, and must not be used in
+    HTTP/3. */
+@@ -71,22 +82,11 @@ typedef struct nghttp3_frame_headers {
    size_t nvlen;
  } nghttp3_frame_headers;
  
@@ -201,11 +326,71 @@ index a8b706a..948e539 100644
  typedef struct nghttp3_frame_settings {
    int64_t type;
    size_t niv;
+@@ -132,6 +132,15 @@ typedef struct nghttp3_frame_origin {
+   nghttp3_vec origin_list;
+ } nghttp3_frame_origin;
+ 
++typedef struct nghttp3_frame_grease {
++  /* type is always NGHTTP3_FRAME_GREASE. */
++  int64_t type;
++  /* grease_type is the reserved frame type sent on the wire. */
++  int64_t grease_type;
++  size_t payloadlen;
++  uint8_t payload[NGHTTP3_GREASE_FRAME_MAX_PAYLOADLEN];
++} nghttp3_frame_grease;
++
+ typedef union nghttp3_frame {
+   nghttp3_frame_hd hd;
+   nghttp3_frame_data data;
+@@ -140,6 +149,7 @@ typedef union nghttp3_frame {
+   nghttp3_frame_goaway goaway;
+   nghttp3_frame_priority_update priority_update;
+   nghttp3_frame_origin origin;
++  nghttp3_frame_grease grease;
+ } nghttp3_frame;
+ 
+ /*
+diff --git a/lib/nghttp3_settings.c b/lib/nghttp3_settings.c
+index 7ee33b6..91009d3 100644
+--- a/lib/nghttp3_settings.c
++++ b/lib/nghttp3_settings.c
+@@ -42,6 +42,7 @@ void nghttp3_settings_default_versioned(int settings_version,
+ 
+   switch (settings_version) {
+   case NGHTTP3_SETTINGS_VERSION:
++  case NGHTTP3_SETTINGS_V4:
+   case NGHTTP3_SETTINGS_V3:
+     settings->glitch_ratelim_burst = NGHTTP3_DEFAULT_GLITCH_RATELIM_BURST;
+     settings->glitch_ratelim_rate = NGHTTP3_DEFAULT_GLITCH_RATELIM_RATE;
+@@ -91,6 +92,9 @@ size_t nghttp3_settingslen_version(int settings_version) {
+   switch (settings_version) {
+   case NGHTTP3_SETTINGS_VERSION:
+     return sizeof(settings);
++  case NGHTTP3_SETTINGS_V4:
++    return offsetof(nghttp3_settings, qpack_indexing_strat) +
++           sizeof(settings.qpack_indexing_strat);
+   case NGHTTP3_SETTINGS_V3:
+     return offsetof(nghttp3_settings, glitch_ratelim_rate) +
+            sizeof(settings.glitch_ratelim_rate);
 diff --git a/lib/nghttp3_stream.c b/lib/nghttp3_stream.c
-index 6a6deaa..eab2893 100644
+index 6a6deaa..181e81d 100644
 --- a/lib/nghttp3_stream.c
 +++ b/lib/nghttp3_stream.c
-@@ -337,43 +337,47 @@ int nghttp3_stream_write_settings(nghttp3_stream *stream,
+@@ -298,6 +298,13 @@ int nghttp3_stream_fill_outq(nghttp3_stream *stream) {
+         return rv;
+       }
+ 
++      break;
++    case NGHTTP3_FRAME_GREASE:
++      rv = nghttp3_stream_write_grease(stream, &fr->grease);
++      if (rv != 0) {
++        return rv;
++      }
++
+       break;
+     default:
+       /* TODO Not implemented */
+@@ -337,43 +344,47 @@ int nghttp3_stream_write_settings(nghttp3_stream *stream,
    nghttp3_buf *chunk;
    nghttp3_typed_buf tbuf;
    nghttp3_settings_entry ents[16];
@@ -282,19 +467,68 @@ index 6a6deaa..eab2893 100644
    }
  
    len = nghttp3_frame_write_settings_len(&payloadlen, &fr);
+@@ -482,6 +493,33 @@ int nghttp3_stream_write_origin(nghttp3_stream *stream,
+   return nghttp3_stream_outq_add(stream, &tbuf);
+ }
+ 
++int nghttp3_stream_write_grease(nghttp3_stream *stream,
++                                const nghttp3_frame_grease *fr) {
++  nghttp3_buf *chunk;
++  nghttp3_typed_buf tbuf;
++  int64_t payloadlen = (int64_t)fr->payloadlen;
++  int rv;
++
++  assert(fr->payloadlen <= sizeof(fr->payload));
++
++  rv = nghttp3_stream_ensure_chunk(
++    stream,
++    nghttp3_frame_write_hd_len(fr->grease_type, payloadlen) + fr->payloadlen);
++  if (rv != 0) {
++    return rv;
++  }
++
++  chunk = nghttp3_stream_get_chunk(stream);
++  nghttp3_typed_buf_shared_init(&tbuf, chunk);
++
++  chunk->last = nghttp3_frame_write_hd(chunk->last, fr->grease_type, payloadlen);
++  chunk->last = nghttp3_cpymem(chunk->last, fr->payload, fr->payloadlen);
++
++  tbuf.buf.last = chunk->last;
++
++  return nghttp3_stream_outq_add(stream, &tbuf);
++}
++
+ int nghttp3_stream_write_headers(nghttp3_stream *stream,
+                                  const nghttp3_frame_headers *fr) {
+   nghttp3_conn *conn = stream->conn;
+diff --git a/lib/nghttp3_stream.h b/lib/nghttp3_stream.h
+index 20fa421..55048cf 100644
+--- a/lib/nghttp3_stream.h
++++ b/lib/nghttp3_stream.h
+@@ -301,6 +301,9 @@ int nghttp3_stream_write_priority_update(
+ int nghttp3_stream_write_origin(nghttp3_stream *stream,
+                                 const nghttp3_frame_origin *fr);
+ 
++int nghttp3_stream_write_grease(nghttp3_stream *stream,
++                                const nghttp3_frame_grease *fr);
++
+ int nghttp3_stream_ensure_chunk(nghttp3_stream *stream, size_t need);
+ 
+ nghttp3_buf *nghttp3_stream_get_chunk(nghttp3_stream *stream);
 diff --git a/tests/nghttp3_conn_test.c b/tests/nghttp3_conn_test.c
-index 8c76646..2472fce 100644
+index 8c76646..5b7ce7c 100644
 --- a/tests/nghttp3_conn_test.c
 +++ b/tests/nghttp3_conn_test.c
-@@ -40,6 +40,7 @@
+@@ -40,6 +40,8 @@
  static const MunitTest tests[] = {
    munit_void_test(test_nghttp3_conn_read_control),
    munit_void_test(test_nghttp3_conn_write_control),
 +  munit_void_test(test_nghttp3_conn_submit_settings),
++  munit_void_test(test_nghttp3_conn_grease_frame),
    munit_void_test(test_nghttp3_conn_submit_request),
    munit_void_test(test_nghttp3_conn_http_request),
    munit_void_test(test_nghttp3_conn_http_resp_header),
-@@ -1396,6 +1397,89 @@ void test_nghttp3_conn_write_control(void) {
+@@ -1396,6 +1398,210 @@ void test_nghttp3_conn_write_control(void) {
    nghttp3_conn_del(conn);
  }
  
@@ -381,18 +615,217 @@ index 8c76646..2472fce 100644
 +  nghttp3_conn_del(conn);
 +}
 +
++static uint8_t grease_rand_next;
++
++static void grease_rand(uint8_t *dest, size_t destlen) {
++  for (; destlen; --destlen) {
++    *dest++ = ++grease_rand_next;
++  }
++}
++
++/* write_grease_control writes the control stream of a client created
++   with |settings| and |callbacks|, checks that a SETTINGS frame
++   follows the stream type, and returns the bytes after the SETTINGS
++   frame in |*prest|. */
++static void write_grease_control(nghttp3_vec *prest,
++                                 const nghttp3_callbacks *callbacks,
++                                 const nghttp3_settings *settings,
++                                 nghttp3_conn **pconn) {
++  nghttp3_vec vec[256];
++  nghttp3_ssize sveccnt, hdlen;
++  nghttp3_raw_frame_hd hd;
++  int64_t stream_id;
++  int fin;
++  int rv;
++
++  rv = nghttp3_conn_client_new(pconn, callbacks, settings,
++                               nghttp3_mem_default(), NULL);
++
++  assert_int(0, ==, rv);
++
++  rv = nghttp3_conn_bind_control_stream(*pconn, 2);
++
++  assert_int(0, ==, rv);
++
++  sveccnt = nghttp3_conn_writev_stream(*pconn, &stream_id, &fin, vec,
++                                       nghttp3_arraylen(vec));
++
++  assert_int64(2, ==, stream_id);
++  assert_ptrdiff(1, ==, sveccnt);
++  assert_uint8(NGHTTP3_STREAM_TYPE_CONTROL, ==, vec[0].base[0]);
++
++  ++vec[0].base;
++  --vec[0].len;
++
++  hdlen = nghttp3_decode_raw_frame_hd(&hd, vec, 1);
++
++  assert_ptrdiff(0, <, hdlen);
++  assert_int64(NGHTTP3_FRAME_SETTINGS, ==, hd.type);
++  assert_size(vec[0].len, >=, (size_t)hdlen + (size_t)hd.length);
++
++  *prest = (nghttp3_vec){
++    .base = vec[0].base + hdlen + hd.length,
++    .len = vec[0].len - (size_t)hdlen - (size_t)hd.length,
++  };
++}
++
++void test_nghttp3_conn_grease_frame(void) {
++  nghttp3_conn *conn;
++  nghttp3_callbacks callbacks;
++  nghttp3_settings settings;
++  nghttp3_vec rest;
++  nghttp3_ssize hdlen;
++  nghttp3_raw_frame_hd hd;
++  uint64_t n = 0;
++  size_t i;
++
++  memset(&callbacks, 0, sizeof(callbacks));
++  nghttp3_settings_default(&settings);
++
++  /* Disabled by default */
++  assert_int(0, ==, settings.grease_frame);
++
++  write_grease_control(&rest, &callbacks, &settings, &conn);
++
++  assert_size(0, ==, rest.len);
++
++  nghttp3_conn_del(conn);
++
++  /* Enabled: one reserved frame right after SETTINGS, with the type
++     and the payload drawn from the rand callback. */
++  callbacks.rand = grease_rand;
++  settings.grease_frame = 1;
++  grease_rand_next = 0;
++
++  write_grease_control(&rest, &callbacks, &settings, &conn);
++
++  /* The map seed is drawn first. */
++  grease_rand_next = sizeof(uint64_t);
++
++  for (i = 0; i < 8; ++i) {
++    n = (n << 8) | (uint8_t)(grease_rand_next + i + 1);
++  }
++
++  hdlen = nghttp3_decode_raw_frame_hd(&hd, &rest, 1);
++
++  assert_ptrdiff(0, <, hdlen);
++  assert_int64((int64_t)(0x1f * (n % (NGHTTP3_GREASE_FRAME_N_MAX + 1)) + 0x21),
++               ==, hd.type);
++  assert_int64((grease_rand_next + 9) % 8, ==, hd.length);
++  assert_size((size_t)hdlen + (size_t)hd.length, ==, rest.len);
++
++  for (i = 0; i < (size_t)hd.length; ++i) {
++    assert_uint8((uint8_t)(grease_rand_next + 10 + i), ==, rest.base[hdlen + i]);
++  }
++
++  nghttp3_conn_del(conn);
++
++  /* Without the rand callback, a valid reserved frame is still sent. */
++  callbacks.rand = NULL;
++
++  write_grease_control(&rest, &callbacks, &settings, &conn);
++
++  hdlen = nghttp3_decode_raw_frame_hd(&hd, &rest, 1);
++
++  assert_ptrdiff(0, <, hdlen);
++  assert_int64(0, ==, (hd.type - 0x21) % 0x1f);
++  assert_int64(0x21, <=, hd.type);
++  assert_int64(NGHTTP3_GREASE_FRAME_MAX_PAYLOADLEN, >=, hd.length);
++  assert_size((size_t)hdlen + (size_t)hd.length, ==, rest.len);
++
++  nghttp3_conn_del(conn);
++}
++
  void test_nghttp3_conn_submit_request(void) {
    nghttp3_conn *conn;
    nghttp3_callbacks callbacks = {
 diff --git a/tests/nghttp3_conn_test.h b/tests/nghttp3_conn_test.h
-index f03c365..088844c 100644
+index f03c365..6351350 100644
 --- a/tests/nghttp3_conn_test.h
 +++ b/tests/nghttp3_conn_test.h
-@@ -37,6 +37,7 @@ extern const MunitSuite conn_suite;
+@@ -37,6 +37,8 @@ extern const MunitSuite conn_suite;
  
  munit_void_test_decl(test_nghttp3_conn_read_control)
  munit_void_test_decl(test_nghttp3_conn_write_control)
 +munit_void_test_decl(test_nghttp3_conn_submit_settings)
++munit_void_test_decl(test_nghttp3_conn_grease_frame)
  munit_void_test_decl(test_nghttp3_conn_submit_request)
  munit_void_test_decl(test_nghttp3_conn_http_request)
  munit_void_test_decl(test_nghttp3_conn_http_resp_header)
+diff --git a/tests/nghttp3_settings_test.c b/tests/nghttp3_settings_test.c
+index 5910972..f6c1921 100644
+--- a/tests/nghttp3_settings_test.c
++++ b/tests/nghttp3_settings_test.c
+@@ -32,6 +32,7 @@
+ static const MunitTest tests[] = {
+   munit_void_test(test_nghttp3_settings_convert_to_latest),
+   munit_void_test(test_nghttp3_settings_convert_to_old),
++  munit_void_test(test_nghttp3_settings_convert_v4),
+   munit_test_end(),
+ };
+ 
+@@ -89,6 +90,52 @@ void test_nghttp3_settings_convert_to_latest(void) {
+   assert_uint64(6831, ==, dest->glitch_ratelim_rate);
+   assert_uint64(NGHTTP3_QPACK_INDEXING_STRAT_NONE, ==,
+                 dest->qpack_indexing_strat);
++  assert_int(0, ==, dest->grease_frame);
++}
++
++/* curl-impersonate: NGHTTP3_SETTINGS_V4 ends at qpack_indexing_strat;
++   grease_frame of NGHTTP3_SETTINGS_V5 defaults to 0. */
++void test_nghttp3_settings_convert_v4(void) {
++  nghttp3_settings *src, srcbuf, settingsbuf, latest;
++  const nghttp3_settings *dest;
++  size_t v4len;
++
++  v4len = nghttp3_settingslen_version(NGHTTP3_SETTINGS_V4);
++
++  assert_size(offsetof(nghttp3_settings, qpack_indexing_strat) +
++                sizeof(srcbuf.qpack_indexing_strat),
++              ==, v4len);
++  assert_size(offsetof(nghttp3_settings, grease_frame), >=, v4len);
++
++  nghttp3_settings_default_versioned(NGHTTP3_SETTINGS_V4, &srcbuf);
++  nghttp3_settings_default(&latest);
++
++  assert_uint64(latest.glitch_ratelim_burst, ==, srcbuf.glitch_ratelim_burst);
++  assert_uint64(latest.glitch_ratelim_rate, ==, srcbuf.glitch_ratelim_rate);
++
++  srcbuf.qpack_indexing_strat = NGHTTP3_QPACK_INDEXING_STRAT_EAGER;
++
++  src = malloc(v4len);
++  memcpy(src, &srcbuf, v4len);
++
++  dest =
++    nghttp3_settings_convert_to_latest(&settingsbuf, NGHTTP3_SETTINGS_V4, src);
++
++  free(src);
++
++  assert_ptr_equal(&settingsbuf, dest);
++  assert_uint64(NGHTTP3_QPACK_INDEXING_STRAT_EAGER, ==,
++                dest->qpack_indexing_strat);
++  assert_int(0, ==, dest->grease_frame);
++
++  settingsbuf.grease_frame = 1;
++  src = malloc(v4len);
++  nghttp3_settings_convert_to_old(NGHTTP3_SETTINGS_V4, src, &settingsbuf);
++
++  assert_uint64(NGHTTP3_QPACK_INDEXING_STRAT_EAGER, ==,
++                src->qpack_indexing_strat);
++
++  free(src);
+ }
+ 
+ void test_nghttp3_settings_convert_to_old(void) {
+diff --git a/tests/nghttp3_settings_test.h b/tests/nghttp3_settings_test.h
+index b85da0a..7af9809 100644
+--- a/tests/nghttp3_settings_test.h
++++ b/tests/nghttp3_settings_test.h
+@@ -36,6 +36,7 @@
+ extern const MunitSuite settings_suite;
+ 
+ munit_void_test_decl(test_nghttp3_settings_convert_to_latest)
++munit_void_test_decl(test_nghttp3_settings_convert_v4)
+ munit_void_test_decl(test_nghttp3_settings_convert_to_old)
+ 
+ #endif /* !defined(NGHTTP3_SETTINGS_TEST_H) */

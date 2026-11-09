@@ -21,11 +21,14 @@ from th1.http2.parser import parse_nghttpd_log
 from th1.http2.signature import HTTP2Signature
 import dpkt
 
+# Data files live next to this module, whatever the working directory.
+TESTS_DIR = pathlib.Path(__file__).resolve().parent
+
 
 @pytest.fixture
 def browser_signatures():
     docs = {}
-    for path in pathlib.Path("signatures").glob("**/*.yaml"):
+    for path in (TESTS_DIR / "signatures").glob("**/*.yaml"):
         with open(path, "r") as f:
             # Parse signatures.yaml database.
             for doc in yaml.safe_load_all(f.read()):
@@ -65,9 +68,9 @@ TEST_URLS = [
 # ]
 
 # List of binaries and their expected signatures
-CURL_BINARIES_AND_SIGNATURES = yaml.safe_load(open("./targets.yaml"))
+CURL_BINARIES_AND_SIGNATURES = yaml.safe_load((TESTS_DIR / "targets.yaml").read_text())
 HTTP3_CLIENTS = []
-for path in pathlib.Path("signatures").glob("**/*.yaml"):
+for path in (TESTS_DIR / "signatures").glob("**/*.yaml"):
     for doc in yaml.safe_load_all(path.read_text()):
         if not doc or not doc.get("signature", {}).get("http3"):
             continue
@@ -136,7 +139,79 @@ EXACT_DYNAMIC_PROFILES = [
     "chrome156_macos",
     "chrome157",
     "chrome157_macos",
+    "firefox159",
+    "firefox159_macos",
 ]
+
+# Gecko request modes exercised per Firefox profile (Chromium: nav only).
+GECKO_EXACT_MODES = ("nav", "fetch", "xhr")
+
+# Firefox 159.0.1 non-pseudo wire order per request mode, written from the
+# live capture (build/gen/firefox-159/NOTES.md), never from lib/http.c or
+# the observed output. HTTP/3: no te, alt-used before referer (nav) or
+# before cookie (fetch/XHR). XHR carries no priority header.
+GECKO_WIRE_HEADER_ORDER = {
+    ("nav", "h2"): (
+        "user-agent", "accept", "accept-language", "accept-encoding",
+        "content-type", "content-length", "origin", "referer", "cookie",
+        "upgrade-insecure-requests", "sec-fetch-dest", "sec-fetch-mode",
+        "sec-fetch-site", "sec-fetch-user", "priority", "te",
+    ),
+    ("nav", "h3"): (
+        "user-agent", "accept", "accept-language", "accept-encoding",
+        "content-type", "content-length", "origin", "alt-used", "referer",
+        "cookie", "upgrade-insecure-requests", "sec-fetch-dest",
+        "sec-fetch-mode", "sec-fetch-site", "sec-fetch-user", "priority",
+    ),
+    ("fetch", "h2"): (
+        "user-agent", "accept", "accept-language", "accept-encoding",
+        "referer", "content-type", "content-length", "origin", "cookie",
+        "sec-fetch-dest", "sec-fetch-mode", "sec-fetch-site", "priority",
+        "te",
+    ),
+    ("fetch", "h3"): (
+        "user-agent", "accept", "accept-language", "accept-encoding",
+        "referer", "content-type", "content-length", "origin", "alt-used",
+        "cookie", "sec-fetch-dest", "sec-fetch-mode", "sec-fetch-site",
+        "priority",
+    ),
+    ("xhr", "h2"): (
+        "user-agent", "accept", "accept-language", "accept-encoding",
+        "content-type", "x-requested-with", "content-length", "origin",
+        "referer", "cookie", "sec-fetch-dest", "sec-fetch-mode",
+        "sec-fetch-site", "te",
+    ),
+    ("xhr", "h3"): (
+        "user-agent", "accept", "accept-language", "accept-encoding",
+        "content-type", "x-requested-with", "content-length", "origin",
+        "referer", "alt-used", "cookie", "sec-fetch-dest", "sec-fetch-mode",
+        "sec-fetch-site",
+    ),
+}
+
+# Pseudo-header order per engine and protocol (Firefox: capture NOTES.md).
+EXACT_PSEUDO_ORDER = {
+    ("chromium", "h2"): (":method", ":authority", ":scheme", ":path"),
+    ("chromium", "h3"): (":method", ":authority", ":scheme", ":path"),
+    ("gecko", "h2"): (":method", ":path", ":authority", ":scheme"),
+    ("gecko", "h3"): (":method", ":scheme", ":authority", ":path"),
+}
+
+
+def _exact_engine(profile):
+    return "gecko" if profile.startswith("firefox") else "chromium"
+
+
+def _exact_dynamic_cases():
+    for profile in EXACT_DYNAMIC_PROFILES:
+        if _exact_engine(profile) == "gecko":
+            for mode in GECKO_EXACT_MODES:
+                yield pytest.param(profile, mode, id=f"{profile}-{mode}")
+        else:
+            yield pytest.param(profile, "nav", id=profile)
+
+
+EXACT_DYNAMIC_CASES = list(_exact_dynamic_cases())
 
 
 @pytest.fixture
@@ -559,16 +634,44 @@ async def test_http2_headers(
     assert equals, msg
 
 
+def _quic_grease_id(key):
+    """RFC 9000 reserved transport parameter ids: 31 * N + 27."""
+    return key.isdigit() and int(key) >= 27 and (int(key) - 27) % 31 == 0
+
+
+def _quic_version_information(value):
+    """The endpoint lists available versions sorted by value, so a random
+    GREASE version lands anywhere; compare them as a multiset."""
+    chosen, separator, available = value.partition("@")
+    if not separator:
+        return value
+    versions = [item if item == "GREASE" else int(item, 0)
+                for item in available.split(",") if item]
+    numbers = sorted(item for item in versions if item != "GREASE")
+    grease = ["GREASE"] * versions.count("GREASE")
+    return f"{chosen}@" + ",".join(str(item) for item in numbers + grease)
+
+
 def _http3_transport_parameters(text, auto_ids=()):
-    """Normalize option hex literals and explicitly variable QUIC values."""
+    """Normalize option syntax and the endpoint rendering to one form.
+
+    The endpoint shows any id of the reserved form as a bare "GREASE"
+    (also 0xff02de1a min_ack_delay) and a zero-length value as "id:0x";
+    the option syntax writes the id and value, and "id" for empty.
+    """
     result = {}
     for item in text.split(";"):
         key, separator, value = item.partition(":")
+        if key == "GREASE" or _quic_grease_id(key):
+            result["GREASE"] = result.get("GREASE", 0) + 1
+            continue
         if value.startswith("0x"):
             value = value[2:]
         if key in auto_ids and value:
             value = "AUTO"
-        result[key] = value if separator else None
+        if key == "17":
+            value = _quic_version_information(value)
+        result[key] = value if separator or key.isdigit() else None
     return result
 
 
@@ -958,13 +1061,42 @@ def _exact_dynamic_inputs(profile, base_headers):
     }
 
 
-def _expected_exact_dynamic_headers(browser_signatures, profile):
+def _gecko_exact_inputs(mode):
+    """Explicit per-test dynamic values of a Gecko cross-site POST."""
+    dynamic = {
+        # From "-d a=1".
+        "content-length": "3",
+        "content-type": "application/x-www-form-urlencoded",
+        # Derived by the engine from the cross-site "-e" on a POST.
+        "origin": "https://example.com",
+        "sec-fetch-site": "cross-site",
+        # From "-e https://example.com/" and "-b sid=1".
+        "referer": "https://example.com/",
+        "cookie": "sid=1",
+    }
+    if mode in ("fetch", "xhr"):
+        # Firefox fetch()/XHR: cors/empty, Accept */*.
+        dynamic.update(
+            {"accept": "*/*", "sec-fetch-dest": "empty", "sec-fetch-mode": "cors"}
+        )
+    if mode == "fetch":
+        dynamic["priority"] = "u=4"
+    if mode == "xhr":
+        dynamic["x-requested-with"] = "XMLHttpRequest"
+    return dynamic
+
+
+def _expected_exact_dynamic_headers(
+    browser_signatures, profile, mode="nav", h3_authority=None
+):
     """Expected [(name, value)] wire sequence for the exact POST tests.
 
     Base header values come from the profile's H2 signature HEADERS
-    frame; dynamic values come from _exact_dynamic_inputs. The order
-    is CANONICAL_WIRE_HEADER_ORDER only -- never the preset string and
-    never the observed output.
+    frame; dynamic values come from _exact_dynamic_inputs (Chromium) or
+    _gecko_exact_inputs (Gecko). The order is CANONICAL_WIRE_HEADER_ORDER
+    (Chromium) or GECKO_WIRE_HEADER_ORDER (Gecko) only -- never the
+    preset string and never the observed output. h3_authority selects
+    the HTTP/3 order and is the expected Gecko alt-used value.
     """
     frames = browser_signatures[profile]["signature"]["http2"]["frames"]
     headers_frame = next(f for f in frames if f["frame_type"] == "HEADERS")
@@ -975,14 +1107,39 @@ def _expected_exact_dynamic_headers(browser_signatures, profile):
         else:
             name, _, value = header.partition(": ")
         base_headers[name.lower()] = value
-    dynamic = _exact_dynamic_inputs(profile, base_headers)
-    values = {**base_headers, **dynamic}
-    expected = [(name, values[name]) for name in CANONICAL_WIRE_HEADER_ORDER]
+    if _exact_engine(profile) == "gecko":
+        dynamic = _gecko_exact_inputs(mode)
+        values = {**base_headers, **dynamic}
+        if h3_authority:
+            values["alt-used"] = h3_authority
+        order = GECKO_WIRE_HEADER_ORDER[(mode, "h3" if h3_authority else "h2")]
+    else:
+        dynamic = _exact_dynamic_inputs(profile, base_headers)
+        values = {**base_headers, **dynamic}
+        order = CANONICAL_WIRE_HEADER_ORDER
+    expected = [(name, values[name]) for name in order]
     return expected, dynamic
 
 
-def _exact_dynamic_curl_args(dynamic):
+def _gecko_exact_curl_args(mode, dynamic):
+    """Gecko POST arguments in an order unlike the wire order.
+
+    Cookie (late on the wire) first; the body before the referer that
+    fetch() puts ahead of content-type; the mode selector last.
+    """
+    args = ["-b", dynamic["cookie"], "-d", "a=1", "-e", dynamic["referer"]]
+    if mode == "fetch":
+        args += ["-H", "Sec-Fetch-Mode: cors"]
+    if mode == "xhr":
+        args += ["-H", f"X-Requested-With: {dynamic['x-requested-with']}"]
+    return args
+
+
+def _exact_dynamic_curl_args(dynamic, profile, mode):
     """POST arguments in deliberately scrambled (non-canonical) order."""
+    if _exact_engine(profile) == "gecko":
+        return _gecko_exact_curl_args(mode, dynamic)
+
     def header(name):
         return ["-H", f"{name}: {dynamic[name]}"]
 
@@ -1095,22 +1252,22 @@ def _parse_nghttpd_headers_frame(output):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("profile", EXACT_DYNAMIC_PROFILES)
+@pytest.mark.parametrize("profile,mode", EXACT_DYNAMIC_CASES)
 async def test_exact_dynamic_header_order_http2(
-    pytestconfig, nghttpd, browser_signatures, profile
+    pytestconfig, nghttpd, browser_signatures, profile, mode
 ):
     """Exact dynamic POST header (name, value) sequence over HTTP/2."""
     curl_binary = os.path.join(
         pytestconfig.getoption("install_dir"), "bin", f"curl_{profile}"
     )
     expected, dynamic = _expected_exact_dynamic_headers(
-        browser_signatures, profile
+        browser_signatures, profile, mode
     )
 
     ret = _run_curl(
         curl_binary,
         env_vars=None,
-        extra_args=["-k"] + _exact_dynamic_curl_args(dynamic),
+        extra_args=["-k"] + _exact_dynamic_curl_args(dynamic, profile, mode),
         urls=["https://localhost:8443/"],
     )
     assert ret == 0
@@ -1119,18 +1276,13 @@ async def test_exact_dynamic_header_order_http2(
     assert len(output) > 0, "nghttpd produced no log output"
 
     pseudo, actual = _parse_nghttpd_headers_frame(output)
-    assert pseudo == [
-        ":method",
-        ":authority",
-        ":scheme",
-        ":path",
-    ]
+    assert pseudo == list(EXACT_PSEUDO_ORDER[(_exact_engine(profile), "h2")])
     assert actual == expected
 
 
-@pytest.mark.parametrize("profile", EXACT_DYNAMIC_PROFILES)
+@pytest.mark.parametrize("profile,mode", EXACT_DYNAMIC_CASES)
 def test_exact_dynamic_header_order_http3(
-    pytestconfig, browser_signatures, profile
+    pytestconfig, browser_signatures, profile, mode
 ):
     """Exact dynamic POST header (name, value) sequence over HTTP/3.
 
@@ -1142,16 +1294,18 @@ def test_exact_dynamic_header_order_http3(
     curl_binary = os.path.join(
         pytestconfig.getoption("install_dir"), "bin", f"curl_{profile}"
     )
+    authority = "fp.impersonate.pro"
     expected, dynamic = _expected_exact_dynamic_headers(
-        browser_signatures, profile
+        browser_signatures, profile, mode, h3_authority=authority
     )
 
     ret, stderr = None, ""
     for attempt in range(2):
         ret, stderr = _run_curl_capture_stderr(
             curl_binary,
-            extra_args=["-v", "--http3-only"] + _exact_dynamic_curl_args(dynamic),
-            url="https://fp.impersonate.pro/api/http3",
+            extra_args=["-v", "--http3-only"]
+            + _exact_dynamic_curl_args(dynamic, profile, mode),
+            url=f"https://{authority}/api/http3",
         )
         if ret == 0:
             break
@@ -1161,10 +1315,14 @@ def test_exact_dynamic_header_order_http3(
     )
 
     pseudo, actual = _parse_http3_verbose_headers(stderr)
+    pseudo_values = {
+        ":method": "POST",
+        ":authority": authority,
+        ":scheme": "https",
+        ":path": "/api/http3",
+    }
     assert pseudo == [
-        (":method", "POST"),
-        (":authority", "fp.impersonate.pro"),
-        (":scheme", "https"),
-        (":path", "/api/http3"),
+        (name, pseudo_values[name])
+        for name in EXACT_PSEUDO_ORDER[(_exact_engine(profile), "h3")]
     ]
     assert actual == expected

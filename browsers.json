@@ -142,6 +142,26 @@
             "wrapper_script": "curl_edge101"
         },
         {
+            "name": "firefox159",
+            "browser": {
+                "name": "firefox",
+                "version": "159.0.1",
+                "os": "win10"
+            },
+            "binary": "curl-impersonate",
+            "wrapper_script": "curl_firefox159"
+        },
+        {
+            "name": "firefox159_macos",
+            "browser": {
+                "name": "firefox",
+                "version": "159.0.1",
+                "os": "macos26.0"
+            },
+            "binary": "curl-impersonate",
+            "wrapper_script": "curl_firefox159_macos"
+        },
+        {
             "name": "safari15_3",
             "browser": {
                 "name": "safari",
