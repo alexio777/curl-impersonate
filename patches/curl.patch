@@ -5329,10 +5329,10 @@ index c3270da1cc..807f0ad6ae 100644
   * Store nghttp2 version info in this buffer.
 diff --git a/lib/impersonate.c b/lib/impersonate.c
 new file mode 100644
-index 0000000000..824afe13de
+index 0000000000..2ac8f25ba0
 --- /dev/null
 +++ b/lib/impersonate.c
-@@ -0,0 +1,3513 @@
+@@ -0,0 +1,3519 @@
 +#include "curl_setup.h"
 +#include <curl/curl.h>
 +#include "impersonate.h"
@@ -6654,7 +6654,7 @@ index 0000000000..824afe13de
 +    .ssl_version = CURL_SSLVERSION_TLSv1_2 | CURL_SSLVERSION_MAX_DEFAULT,
 +    .curves = "X25519MLKEM768:X25519:P-256:P-384",
 +    .http3_curves = "X25519MLKEM768:X25519:P-256:P-384",
-+    .sig_hash_algs = "mldsa44:mldsa65:mldsa87:ecdsa_secp256r1_sha256:rsa_pss_rsae_sha256:rsa_pkcs1_sha256:ecdsa_secp384r1_sha384:rsa_pss_rsae_sha384:rsa_pkcs1_sha384:rsa_pss_rsae_sha512:rsa_pkcs1_sha512",
++    .sig_hash_algs = "GREASE:mldsa44:mldsa65:mldsa87:ecdsa_secp256r1_sha256:rsa_pss_rsae_sha256:rsa_pkcs1_sha256:ecdsa_secp384r1_sha384:rsa_pss_rsae_sha384:rsa_pkcs1_sha384:rsa_pss_rsae_sha512:rsa_pkcs1_sha512",
 +    .cert_compression = "brotli",
 +    .tls_delegated_credentials = NULL,
 +    .tls_trust_anchors = "44947.2.1,44947.2.6,44947.2.13,44947.2.14,44947.2.15,44947.2.18,44947.2.19,44947.2.20,52580.200109.1.7,52580.200109.1.8,52580.200109.1.9,52580.200109.1.10,52580.200109.1.11,52580.200109.1.12,52580.200109.1.13,52580.200109.1.18,52580.200109.1.19,11129.9.1,11129.9.4,11129.9.5,11129.9.6,11129.9.7,11129.9.8,11129.9.10,11129.9.11,11129.9.12,11129.9.13,11129.9.15",
@@ -6722,7 +6722,7 @@ index 0000000000..824afe13de
 +    .ssl_version = CURL_SSLVERSION_TLSv1_2 | CURL_SSLVERSION_MAX_DEFAULT,
 +    .curves = "X25519MLKEM768:X25519:P-256:P-384",
 +    .http3_curves = "X25519MLKEM768:X25519:P-256:P-384",
-+    .sig_hash_algs = "mldsa44:mldsa65:mldsa87:ecdsa_secp256r1_sha256:rsa_pss_rsae_sha256:rsa_pkcs1_sha256:ecdsa_secp384r1_sha384:rsa_pss_rsae_sha384:rsa_pkcs1_sha384:rsa_pss_rsae_sha512:rsa_pkcs1_sha512",
++    .sig_hash_algs = "GREASE:mldsa44:mldsa65:mldsa87:ecdsa_secp256r1_sha256:rsa_pss_rsae_sha256:rsa_pkcs1_sha256:ecdsa_secp384r1_sha384:rsa_pss_rsae_sha384:rsa_pkcs1_sha384:rsa_pss_rsae_sha512:rsa_pkcs1_sha512",
 +    .cert_compression = "brotli",
 +    .tls_delegated_credentials = NULL,
 +    .tls_trust_anchors = "44947.2.1,44947.2.6,44947.2.13,44947.2.14,44947.2.15,44947.2.18,44947.2.19,44947.2.20,52580.200109.1.7,52580.200109.1.8,52580.200109.1.9,52580.200109.1.10,52580.200109.1.11,52580.200109.1.12,52580.200109.1.13,52580.200109.1.18,52580.200109.1.19,11129.9.1,11129.9.4,11129.9.5,11129.9.6,11129.9.7,11129.9.8,11129.9.10,11129.9.11,11129.9.12,11129.9.13,11129.9.15",
@@ -6790,7 +6790,8 @@ index 0000000000..824afe13de
 +    .ssl_version = CURL_SSLVERSION_TLSv1_2 | CURL_SSLVERSION_MAX_DEFAULT,
 +    .curves = "X25519MLKEM768:X25519:P-256:P-384",
 +    .http3_curves = "X25519MLKEM768:X25519:P-256:P-384",
-+    .sig_hash_algs = "mldsa44:mldsa65:mldsa87:ecdsa_secp256r1_sha256:rsa_pss_rsae_sha256:rsa_pkcs1_sha256:ecdsa_secp384r1_sha384:rsa_pss_rsae_sha384:rsa_pkcs1_sha384:rsa_pss_rsae_sha512:rsa_pkcs1_sha512",
++    .sig_hash_algs = "GREASE:mldsa44:mldsa65:mldsa87:ecdsa_secp256r1_sha256:rsa_pss_rsae_sha256:rsa_pkcs1_sha256:ecdsa_secp384r1_sha384:rsa_pss_rsae_sha384:rsa_pkcs1_sha384:rsa_pss_rsae_sha512:rsa_pkcs1_sha512",
++    .http3_sig_hash_algs = "ecdsa_secp256r1_sha256:rsa_pss_rsae_sha256:rsa_pkcs1_sha256:ecdsa_secp384r1_sha384:rsa_pss_rsae_sha384:rsa_pkcs1_sha384:rsa_pss_rsae_sha512:rsa_pkcs1_sha512:rsa_pkcs1_sha1",
 +    .cert_compression = "brotli",
 +    .tls_delegated_credentials = NULL,
 +    .tls_trust_anchors = "44947.2.1,44947.2.6,44947.2.13,44947.2.14,44947.2.15,44947.2.18,44947.2.19,44947.2.20,52580.200109.1.7,52580.200109.1.8,52580.200109.1.9,52580.200109.1.10,52580.200109.1.11,52580.200109.1.12,52580.200109.1.13,52580.200109.1.18,52580.200109.1.19,11129.9.1,11129.9.4,11129.9.5,11129.9.6,11129.9.7,11129.9.8,11129.9.10,11129.9.11,11129.9.12,11129.9.13,11129.9.15",
@@ -6817,6 +6818,8 @@ index 0000000000..824afe13de
 +    .quic_transport_parameters = "5:6291456;12584:0x4f524947;8:100;9:103;17:1@1,GREASE;6:6291456;GREASE;1:30000;4:15728640;7:6291456;3:1472;15:AUTO;32:65536",
 +    .split_cookies = true,
 +    .form_boundary = "webkit",
++    .quic_cid_length = "webkit",
++    .quic_initial_packet_number = 1,
 +    .http2_stream_weight = 256,
 +    .http2_stream_exclusive = 1,
 +    .http_headers = {
@@ -6858,7 +6861,8 @@ index 0000000000..824afe13de
 +    .ssl_version = CURL_SSLVERSION_TLSv1_2 | CURL_SSLVERSION_MAX_DEFAULT,
 +    .curves = "X25519MLKEM768:X25519:P-256:P-384",
 +    .http3_curves = "X25519MLKEM768:X25519:P-256:P-384",
-+    .sig_hash_algs = "mldsa44:mldsa65:mldsa87:ecdsa_secp256r1_sha256:rsa_pss_rsae_sha256:rsa_pkcs1_sha256:ecdsa_secp384r1_sha384:rsa_pss_rsae_sha384:rsa_pkcs1_sha384:rsa_pss_rsae_sha512:rsa_pkcs1_sha512",
++    .sig_hash_algs = "GREASE:mldsa44:mldsa65:mldsa87:ecdsa_secp256r1_sha256:rsa_pss_rsae_sha256:rsa_pkcs1_sha256:ecdsa_secp384r1_sha384:rsa_pss_rsae_sha384:rsa_pkcs1_sha384:rsa_pss_rsae_sha512:rsa_pkcs1_sha512",
++    .http3_sig_hash_algs = "ecdsa_secp256r1_sha256:rsa_pss_rsae_sha256:rsa_pkcs1_sha256:ecdsa_secp384r1_sha384:rsa_pss_rsae_sha384:rsa_pkcs1_sha384:rsa_pss_rsae_sha512:rsa_pkcs1_sha512:rsa_pkcs1_sha1",
 +    .cert_compression = "brotli",
 +    .tls_delegated_credentials = NULL,
 +    .tls_trust_anchors = "44947.2.1,44947.2.6,44947.2.13,44947.2.14,44947.2.15,44947.2.18,44947.2.19,44947.2.20,52580.200109.1.7,52580.200109.1.8,52580.200109.1.9,52580.200109.1.10,52580.200109.1.11,52580.200109.1.12,52580.200109.1.13,52580.200109.1.18,52580.200109.1.19,11129.9.1,11129.9.4,11129.9.5,11129.9.6,11129.9.7,11129.9.8,11129.9.10,11129.9.11,11129.9.12,11129.9.13,11129.9.15",
@@ -6885,6 +6889,8 @@ index 0000000000..824afe13de
 +    .quic_transport_parameters = "5:6291456;12584:0x4f524947;8:100;9:103;17:1@1,GREASE;6:6291456;GREASE;1:30000;4:15728640;7:6291456;3:1472;15:AUTO;32:65536",
 +    .split_cookies = true,
 +    .form_boundary = "webkit",
++    .quic_cid_length = "webkit",
++    .quic_initial_packet_number = 1,
 +    .http2_stream_weight = 256,
 +    .http2_stream_exclusive = 1,
 +    .http_headers = {
@@ -12590,7 +12596,7 @@ index fbca4b84b8..894adb38c8 100644
    return CURLE_OK;
  }
 diff --git a/lib/vtls/openssl.c b/lib/vtls/openssl.c
-index 7bb7a8c50e..f11014bfa1 100644
+index 7bb7a8c50e..682481fc6e 100644
 --- a/lib/vtls/openssl.c
 +++ b/lib/vtls/openssl.c
 @@ -37,6 +37,7 @@
@@ -12638,7 +12644,7 @@ index 7bb7a8c50e..f11014bfa1 100644
  #if defined(HAVE_SSL_SET1_ECH_CONFIG_LIST) && !defined(HAVE_BORINGSSL_LIKE)
  #include <openssl/ech.h>
  #endif
-@@ -165,6 +186,117 @@
+@@ -165,6 +186,126 @@
  
  #ifdef HAVE_BORINGSSL_LIKE
  typedef size_t numcert_t;
@@ -12692,9 +12698,11 @@ index 7bb7a8c50e..f11014bfa1 100644
 +static CURLcode parse_sig_algs(struct Curl_easy *data,
 +                               const char *sigalgs,
 +                               uint16_t *algs,
-+                               size_t *nalgs)
++                               size_t *nalgs,
++                               bool *grease)
 +{
 +  *nalgs = 0;
++  *grease = FALSE;
 +  while(sigalgs && sigalgs[0]) {
 +    int i;
 +    bool found = FALSE;
@@ -12728,7 +12736,14 @@ index 7bb7a8c50e..f11014bfa1 100644
 +    memcpy(algname, sigalgs, len);
 +    algname[len] = 0;
 +
-+    for(i = 0; i < MAX_SIG_ALGS; i++) {
++    /* curl-impersonate: a leading "GREASE" asks BoringSSL to prepend a
++     * GREASE signature algorithm (RFC 8701), as Chrome 156+ does. */
++    if(!*nalgs && !*grease && curl_strequal(algname, "GREASE")) {
++      *grease = TRUE;
++      found = TRUE;
++    }
++
++    for(i = 0; !found && i < MAX_SIG_ALGS; i++) {
 +      if(curl_strequal(algname, kSignatureAlgorithmNames[i].name)) {
 +        algs[*nalgs] = kSignatureAlgorithmNames[i].signature_algorithm;
 +        (*nalgs)++;
@@ -12756,7 +12771,7 @@ index 7bb7a8c50e..f11014bfa1 100644
  typedef uint32_t sslerr_t;
  #else
  typedef int numcert_t;
-@@ -2443,6 +2575,191 @@ static const char *tls_rt_type(int type)
+@@ -2443,6 +2584,191 @@ static const char *tls_rt_type(int type)
    }
  }
  
@@ -12948,7 +12963,7 @@ index 7bb7a8c50e..f11014bfa1 100644
  /*
   * Our callback from the SSL/TLS layers.
   */
-@@ -2981,6 +3298,194 @@ static CURLcode ossl_windows_load_anchors(struct Curl_cfilter *cf,
+@@ -2981,6 +3307,194 @@ static CURLcode ossl_windows_load_anchors(struct Curl_cfilter *cf,
    return result;
  }
  
@@ -13143,7 +13158,7 @@ index 7bb7a8c50e..f11014bfa1 100644
  #endif /* USE_WIN32_CRYPTO */
  
  static CURLcode ossl_load_trust_anchors(struct Curl_cfilter *cf,
-@@ -2998,7 +3503,19 @@ static CURLcode ossl_load_trust_anchors(struct Curl_cfilter *cf,
+@@ -2998,7 +3512,19 @@ static CURLcode ossl_load_trust_anchors(struct Curl_cfilter *cf,
  
    octx->store_is_empty = TRUE;
    if(conn_config->native_ca_store) {
@@ -13164,7 +13179,7 @@ index 7bb7a8c50e..f11014bfa1 100644
      bool added = FALSE;
      result = ossl_windows_load_anchors(cf, data, store, &added);
      if(result)
-@@ -3079,7 +3596,11 @@ static CURLcode ossl_load_trust_anchors(struct Curl_cfilter *cf,
+@@ -3079,7 +3605,11 @@ static CURLcode ossl_load_trust_anchors(struct Curl_cfilter *cf,
    }
  
  #ifdef CURL_CA_FALLBACK
@@ -13177,7 +13192,7 @@ index 7bb7a8c50e..f11014bfa1 100644
      /* verifying the peer without any CA certificates does not
         work so use OpenSSL's built-in default as fallback */
      X509_STORE_set_default_paths(store);
-@@ -3493,19 +4014,57 @@ static CURLcode ossl_init_ech(struct ossl_ctx *octx,
+@@ -3493,19 +4023,57 @@ static CURLcode ossl_init_ech(struct ossl_ctx *octx,
  {
    struct ssl_filter_config *conn_config = Curl_ssl_cf_get_filter_config(cf);
    int trying_ech_now = 0;
@@ -13237,7 +13252,7 @@ index 7bb7a8c50e..f11014bfa1 100644
  #ifdef HAVE_BORINGSSL_LIKE
      uint8_t *ech_config;
      size_t ech_config_len = 0;
-@@ -3551,7 +4110,7 @@ static CURLcode ossl_init_ech(struct ossl_ctx *octx,
+@@ -3551,7 +4119,7 @@ static CURLcode ossl_init_ech(struct ossl_ctx *octx,
  #endif /* HAVE_BORINGSSL_LIKE */
      infof(data, "ECH: ECHConfig from command line");
    }
@@ -13246,7 +13261,7 @@ index 7bb7a8c50e..f11014bfa1 100644
      const struct Curl_https_rrinfo *rinfo =
        Curl_conn_dns_get_https(data, cf->sockindex, peer->origin);
  
-@@ -3598,11 +4157,18 @@ static CURLcode ossl_init_ech(struct ossl_ctx *octx,
+@@ -3598,11 +4166,18 @@ static CURLcode ossl_init_ech(struct ossl_ctx *octx,
      }
    }
  #endif /* HAVE_BORINGSSL_LIKE */
@@ -13267,7 +13282,7 @@ index 7bb7a8c50e..f11014bfa1 100644
  
    return CURLE_OK;
  }
-@@ -3616,6 +4182,11 @@ static CURLcode ossl_init_ssl(struct ossl_ctx *octx,
+@@ -3616,6 +4191,11 @@ static CURLcode ossl_init_ssl(struct ossl_ctx *octx,
                                void *ssl_user_data,
                                Curl_ossl_init_session_reuse_cb *sess_reuse_cb)
  {
@@ -13279,7 +13294,7 @@ index 7bb7a8c50e..f11014bfa1 100644
    /* Let's make an SSL structure */
    if(octx->ssl)
      SSL_free(octx->ssl);
-@@ -3627,6 +4198,34 @@ static CURLcode ossl_init_ssl(struct ossl_ctx *octx,
+@@ -3627,6 +4207,34 @@ static CURLcode ossl_init_ssl(struct ossl_ctx *octx,
  
    SSL_set_app_data(octx->ssl, ssl_user_data);
  
@@ -13314,7 +13329,7 @@ index 7bb7a8c50e..f11014bfa1 100644
  #ifndef OPENSSL_NO_OCSP
    if(Curl_ssl_cf_get_filter_config(cf)->verifystatus)
      SSL_set_tlsext_status_type(octx->ssl, TLSEXT_STATUSTYPE_ocsp);
-@@ -3706,9 +4305,123 @@ static CURLcode ossl_init_method(struct Curl_cfilter *cf,
+@@ -3706,9 +4314,123 @@ static CURLcode ossl_init_method(struct Curl_cfilter *cf,
    return *pmethod ? CURLE_OK : CURLE_SSL_CONNECT_ERROR;
  }
  
@@ -13438,7 +13453,7 @@ index 7bb7a8c50e..f11014bfa1 100644
                              struct ssl_peer *peer,
                              const struct alpn_spec *alpns_requested,
                              Curl_ossl_ctx_setup_cb *cb_setup,
-@@ -3729,6 +4442,9 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
+@@ -3729,6 +4451,9 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
    unsigned int ssl_version_min;
    char error_buffer[256];
  
@@ -13448,7 +13463,7 @@ index 7bb7a8c50e..f11014bfa1 100644
    /* Make funny stuff to get random input */
    result = ossl_seed(data);
    if(result)
-@@ -3810,7 +4526,15 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
+@@ -3810,7 +4535,15 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
       workarounds. In order to keep the secure workaround, the
       SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS bit must not be set. */
  
@@ -13465,7 +13480,7 @@ index 7bb7a8c50e..f11014bfa1 100644
  
    /* mitigate CVE-2010-4180 */
    ctx_options &= ~(ctx_option_t)SSL_OP_NETSCAPE_REUSE_CIPHER_CHANGE_BUG;
-@@ -3866,10 +4590,29 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
+@@ -3866,10 +4599,29 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
    /* We do retry writes sometimes from another buffer address */
    SSL_CTX_set_mode(octx->ssl_ctx, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
  
@@ -13495,7 +13510,7 @@ index 7bb7a8c50e..f11014bfa1 100644
      if(!SSL_CTX_set_cipher_list(octx->ssl_ctx, ciphers)) {
        failf(data, "failed setting cipher list: %s", ciphers);
        return CURLE_SSL_CIPHER;
-@@ -3910,7 +4653,8 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
+@@ -3910,7 +4662,8 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
  #endif
  
    {
@@ -13505,7 +13520,7 @@ index 7bb7a8c50e..f11014bfa1 100644
      if(curves) {
  #ifdef HAVE_BORINGSSL_LIKE
  #define OSSL_CURVE_CAST(x) (x)
-@@ -3924,10 +4668,12 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
+@@ -3924,10 +4677,12 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
      }
    }
  
@@ -13520,7 +13535,7 @@ index 7bb7a8c50e..f11014bfa1 100644
      if(signature_algorithms) {
        if(!SSL_CTX_set1_sigalgs_list(octx->ssl_ctx,
                                      OSSL_SIGALG_CAST(signature_algorithms))) {
-@@ -3939,11 +4685,130 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
+@@ -3939,11 +4694,137 @@ CURLcode Curl_ossl_ctx_init(struct ossl_ctx *octx,
    }
  #endif
  
@@ -13528,12 +13543,13 @@ index 7bb7a8c50e..f11014bfa1 100644
 +  {
 +    uint16_t algs[MAX_SIG_ALGS];
 +    size_t nalgs;
++    bool grease_sigalgs = FALSE;
 +    /* curl-impersonate: Set the signature algorithms (TLS extension 13). */
 +    const char *signature_algorithms =
 +      Curl_ssl_config_get_signature_algorithms(conn_config, peer->transport);
 +    if(signature_algorithms) {
 +      CURLcode result = parse_sig_algs(data, signature_algorithms, algs,
-+                                       &nalgs);
++                                       &nalgs, &grease_sigalgs);
 +      if(result)
 +        return result;
 +    }
@@ -13550,6 +13566,12 @@ index 7bb7a8c50e..f11014bfa1 100644
 +        failf(data, "failed setting default signature algorithms");
 +      return CURLE_SSL_CIPHER;
 +    }
++#ifdef OPENSSL_IS_BORINGSSL
++    /* curl-impersonate: QUIC ClientHellos carry no GREASE at all. */
++    SSL_CTX_set_grease_sigalgs_enabled(octx->ssl_ctx,
++                                       grease_sigalgs &&
++                                       peer->transport != TRNSPRT_QUIC);
++#endif
 +  }
 +#endif
 +
@@ -13651,7 +13673,7 @@ index 7bb7a8c50e..f11014bfa1 100644
  
    /* Enable logging of secrets to the file specified in env SSLKEYLOGFILE. */
  #if !defined(HAVE_KEYLOG_UPSTREAM) && defined(HAVE_KEYLOG_CALLBACK)
-@@ -4045,7 +4910,8 @@ static CURLcode ossl_connect_step1(struct Curl_cfilter *cf,
+@@ -4045,7 +4926,8 @@ static CURLcode ossl_connect_step1(struct Curl_cfilter *cf,
    DEBUGASSERT(octx);
    DEBUGASSERT(connssl->peer.origin);
  
@@ -13661,7 +13683,7 @@ index 7bb7a8c50e..f11014bfa1 100644
                                connssl->alpn, NULL, NULL,
                                ossl_new_session_cb, cf,
                                ossl_on_session_reuse);
-@@ -4148,6 +5014,40 @@ static int ossl_trace_ech_retry_configs(struct Curl_cfilter *cf,
+@@ -4148,6 +5030,40 @@ static int ossl_trace_ech_retry_configs(struct Curl_cfilter *cf,
    return rv;
  }
  
@@ -13702,7 +13724,7 @@ index 7bb7a8c50e..f11014bfa1 100644
  #endif
  
  static CURLcode ossl_connect_step2(struct Curl_cfilter *cf,
-@@ -4274,6 +5174,13 @@ static CURLcode ossl_connect_step2(struct Curl_cfilter *cf,
+@@ -4274,6 +5190,13 @@ static CURLcode ossl_connect_step2(struct Curl_cfilter *cf,
          /* trace retry_configs if we got some */
          ossl_trace_ech_retry_configs(cf, data, octx->ssl, reason);
  
@@ -13716,7 +13738,7 @@ index 7bb7a8c50e..f11014bfa1 100644
          result = CURLE_ECH_REQUIRED;
          failf(data, "ECH: rejected, %s",
                ossl_strerror(errdetail, error_buffer, sizeof(error_buffer)));
-@@ -4281,8 +5188,10 @@ static CURLcode ossl_connect_step2(struct Curl_cfilter *cf,
+@@ -4281,8 +5204,10 @@ static CURLcode ossl_connect_step2(struct Curl_cfilter *cf,
  #endif
        else {
          result = CURLE_SSL_CONNECT_ERROR;
@@ -13729,7 +13751,7 @@ index 7bb7a8c50e..f11014bfa1 100644
        }
  
        /* detail is already set to the SSL error above */
-@@ -4295,10 +5204,20 @@ static CURLcode ossl_connect_step2(struct Curl_cfilter *cf,
+@@ -4295,10 +5220,20 @@ static CURLcode ossl_connect_step2(struct Curl_cfilter *cf,
          char extramsg[80] = "";
          int sockerr = SOCKERRNO;
  
@@ -13753,7 +13775,7 @@ index 7bb7a8c50e..f11014bfa1 100644
                connssl->peer.origin->hostname, connssl->peer.origin->port);
        }
  
-@@ -4310,6 +5229,22 @@ static CURLcode ossl_connect_step2(struct Curl_cfilter *cf,
+@@ -4310,6 +5245,22 @@ static CURLcode ossl_connect_step2(struct Curl_cfilter *cf,
      connssl->connecting_state = ssl_connect_3;
      Curl_ossl_report_handshake(data, octx);
  
@@ -13776,7 +13798,7 @@ index 7bb7a8c50e..f11014bfa1 100644
  #if defined(HAVE_SSL_SET1_ECH_CONFIG_LIST) && !defined(HAVE_BORINGSSL_LIKE)
      if(Curl_ssl_ech_enabled(cf)) {
        struct ssl_filter_config *conn_config =
-@@ -4831,8 +5766,14 @@ CURLcode Curl_ossl_check_peer_cert(struct Curl_cfilter *cf,
+@@ -4831,8 +5782,14 @@ CURLcode Curl_ossl_check_peer_cert(struct Curl_cfilter *cf,
    infof(data, "OpenSSL verify result: %lx", (unsigned long)ossl_verify);
  
    verified = (ossl_verify == X509_V_OK);
@@ -13793,7 +13815,7 @@ index 7bb7a8c50e..f11014bfa1 100644
  
  #ifdef USE_APPLE_SECTRUST
    if(!verified && conn_config->verifypeer && conn_config->native_ca_store) {
-@@ -5065,6 +6006,16 @@ static CURLcode ossl_connect(struct Curl_cfilter *cf,
+@@ -5065,6 +6022,16 @@ static CURLcode ossl_connect(struct Curl_cfilter *cf,
  
  out:
    if(result == CURLE_AGAIN) {
@@ -16348,7 +16370,7 @@ index 69554ee490..d0052604bd 100644
  # if unit tests are enabled, build a static library to link them with
  if BUILD_UNITTESTS
 diff --git a/src/config2setopts.c b/src/config2setopts.c
-index 736cdd3db1..076378f2ca 100644
+index 736cdd3db1..85e013dd00 100644
 --- a/src/config2setopts.c
 +++ b/src/config2setopts.c
 @@ -403,6 +403,9 @@ static CURLcode ssl_setopts(struct OperationConfig *config, CURL *curl)
@@ -16460,7 +16482,7 @@ index 736cdd3db1..076378f2ca 100644
  
    return result;
  }
-@@ -713,6 +788,87 @@ static CURLcode http_setopts(struct OperationConfig *config, CURL *curl,
+@@ -713,6 +788,88 @@ static CURLcode http_setopts(struct OperationConfig *config, CURL *curl,
    if(config->hsts)
      MY_SETOPT_STR(curl, CURLOPT_HSTS, config->hsts);
  
@@ -16536,8 +16558,9 @@ index 736cdd3db1..076378f2ca 100644
 +                  CURLOPT_QUIC_CID_LENGTH,
 +                  config->quic_cid_length);
 +
-+  my_setopt_long(curl, CURLOPT_QUIC_INITIAL_PACKET_NUMBER,
-+                 config->quic_initial_packet_number);
++  if(config->quic_initial_packet_number >= -1)
++    my_setopt_long(curl, CURLOPT_QUIC_INITIAL_PACKET_NUMBER,
++                   config->quic_initial_packet_number);
 +
 +  if(config->quic_transport_parameters)
 +    my_setopt_str(curl,
@@ -16548,7 +16571,7 @@ index 736cdd3db1..076378f2ca 100644
    if(config->expect100timeout_ms > 0)
      my_setopt_long(curl, CURLOPT_EXPECT_100_TIMEOUT_MS,
                     config->expect100timeout_ms);
-@@ -882,6 +1038,10 @@ static CURLcode proxy_setopts(struct OperationConfig *config, CURL *curl)
+@@ -882,6 +1039,10 @@ static CURLcode proxy_setopts(struct OperationConfig *config, CURL *curl)
    if(config->haproxy_clientip)
      MY_SETOPT_STR(curl, CURLOPT_HAPROXY_CLIENT_IP, config->haproxy_clientip);
  
@@ -16559,7 +16582,7 @@ index 736cdd3db1..076378f2ca 100644
    MY_SETOPT_STR(curl, CURLOPT_PROXY_KEYPASSWD, config->proxy_key_passwd);
  
    return result;
-@@ -969,11 +1129,13 @@ static CURLcode credentials_and_headers_setopts(struct OperationConfig *config,
+@@ -969,11 +1130,13 @@ static CURLcode credentials_and_headers_setopts(struct OperationConfig *config,
      my_setopt_bitmask(curl, CURLOPT_HTTPAUTH, config->authtype);
  
    my_setopt_slist(curl, CURLOPT_HTTPHEADER, config->headers);
@@ -16575,7 +16598,7 @@ index 736cdd3db1..076378f2ca 100644
    }
  
    MY_SETOPT_STR(curl, CURLOPT_KEYPASSWD, config->key_passwd);
-@@ -1002,6 +1164,31 @@ static CURLcode transfer_setopts(struct OperationConfig *config,
+@@ -1002,6 +1165,31 @@ static CURLcode transfer_setopts(struct OperationConfig *config,
    if(result)
      return result;
  
@@ -16608,7 +16631,7 @@ index 736cdd3db1..076378f2ca 100644
      my_setopt_long(curl, CURLOPT_MIME_OPTIONS, config->mime_options);
  
 diff --git a/src/tool_cfgable.c b/src/tool_cfgable.c
-index 26b44f8438..fa57b23e6b 100644
+index 26b44f8438..6613109a47 100644
 --- a/src/tool_cfgable.c
 +++ b/src/tool_cfgable.c
 @@ -49,6 +49,16 @@ struct OperationConfig *config_alloc(void)
@@ -16619,7 +16642,7 @@ index 26b44f8438..fa57b23e6b 100644
 +    CURL_HTTP3_SSL_PERMUTE_FALLBACK;
 +  config->quic_permute_transport_parameters =
 +    CURL_HTTP3_SSL_PERMUTE_FALLBACK;
-+  config->quic_initial_packet_number = 0L;
++  config->quic_initial_packet_number = -2L; /* unset: keep the target's */
 +  config->http2_initial_stream_id = -1L;
 +  config->http2_stream_window_update = -1L;
 +  config->ech_grease_len = -1L;

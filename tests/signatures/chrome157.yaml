@@ -66,6 +66,7 @@ signature:
     - type: status_request
     - type: signature_algorithms
       sig_hash_algs:
+      - -1
       - 2308
       - 2309
       - 2310

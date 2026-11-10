@@ -114,3 +114,70 @@ This affected ``chrome152``, ``chrome152_macos``, and ``safari270_ios``, whose
 HTTP/3 headers differ from their regular defaults.
 
 To generate or update profiles from JSON, see :doc:`dev`.
+
+Independent verification
+------------------------
+
+On 2026-11-10 the profiles below were compared with the real browsers they
+impersonate, using public echo services:
+
+- ``tls.peet.ws`` (``/api/all``): TLS, HTTP/2 and request headers.
+- ``tls.browserleaks.com`` (``/json``): TLS and HTTP/2.
+- ``fp.impersonate.pro`` (``/api/http2``, ``/api/http3``): TLS, HTTP/2, HTTP/3,
+  QUIC and request headers.
+
+The browser and curl each made two runs against every endpoint. A field counts
+only if it is the same in both runs of the same source (stability), and the
+browser and curl values must then be equal. The comparison also has a negative
+control: different browser families must differ. As a third check, the browser's
+JA4 from the echo services must match an offline capture of the same browser.
+Result: 237 of 237 cells match, 0 mismatches, 0 unstable.
+
+Compared fields:
+
+- TLS: JA4 and JA4_r. For Firefox and Safari also JA3, JA4_o/JA4_ro,
+  extension order and peetprint (all browsers).
+- HTTP/2: Akamai fingerprint (SETTINGS, WINDOW_UPDATE, priority,
+  pseudo-header order).
+- Headers: header names, values and order over HTTP/2 and HTTP/3, and
+  ``User-Agent``.
+- HTTP/3: QUIC JA4, normalized HTTP/3 SETTINGS and QUIC transport parameters
+  (perk), client and server connection ID length, and the initial packet
+  number (exact value, or "random, > 0" for Firefox).
+
+.. csv-table::
+   :header: "Target", "Reference browser and device", "JA4", "peetprint hash", "Akamai-H2 hash", "HTTP/3", "Headers"
+
+   "``firefox159``", "Firefox 159.0.1 (local) and Firefox 159.0 on Windows 11 (BrowserStack)", "``t13d1517h2_8daaf6152771_3cbfd9057e0d``", "``a4bbbc7e3adf3db97d276fd0adb1efc4``", "``6ea73faa8fc5aac76bded7bd238f6433``", "Match (``q13d0315h3_55b375c5d22e_dc5437974b47``)", "Match"
+   "``firefox159_macos``", "Firefox 159.0 on macOS Tahoe (BrowserStack)", "``t13d1517h2_8daaf6152771_3cbfd9057e0d``", "``a4bbbc7e3adf3db97d276fd0adb1efc4``", "``6ea73faa8fc5aac76bded7bd238f6433``", "Match (``q13d0315h3_55b375c5d22e_dc5437974b47``)", "Match"
+   "``chrome157``", "Chrome for Testing 157.0.8103.38, headless, Windows UA (local)", "``t13d1517h2_8daaf6152771_cb7bf5808d99``", "``fc97c1cdfb1409c9a9326c1b726d1dee``", "``52d84b11737d980aef856699f885ca86``", "Match (``q13d0312h3_55b375c5d22e_178839b6cec1``)", "Match"
+   "``safari27_ios``, ``safari272_ios``", "Safari 27.0, iPhone 18 Pro, iOS 27 (BrowserStack)", "``t13d2013h2_a09f3c656075_7f0f34a4126d``", "``62b834de729e78a9f0ebd1dd099314a7``", "``c52879e43202aeb92740be6e8c86ea96``", "Not verified", "Match (HTTP/2)"
+   "``samsung30_android``, ``samsung31_android``", "Samsung Internet 30.0, Galaxy S26, Android 16 (BrowserStack)", "``t13d1516h2_8daaf6152771_d8a2da3f94cd``", "``1d4ffe9b0e34acac0bd883fa7f79d7b5``", "``52d84b11737d980aef856699f885ca86``", "Not verified", "Match (HTTP/2)"
+
+Notes:
+
+1. HTTP/3 on mobile is **not verified**. Both BrowserStack devices fell back to
+   HTTP/2 in 5 of 5 attempts in each run, because BrowserStack is used without
+   BrowserStack Local here. There was no device HTTP/3 data to compare against.
+   ``samsung30_android`` and ``samsung31_android`` have no HTTP/3 fingerprint.
+2. Out of scope:
+
+   - ``tcpip``: comes from the host operating system's TCP/IP stack, not from
+     curl.
+   - JA3 and the raw TLS extension order (``ja4_o``, ``ja4_ro``) for Chromium and
+     Samsung Internet: these browsers shuffle TLS extensions on every connection,
+     so the values differ even between two runs of the same browser. For Firefox
+     this applies to HTTP/3 only, where it shuffles the QUIC TLS extensions.
+     JA4 sorts extensions and is compared instead.
+   - Per-connection random values (``client_random``, ``session_id``) and the
+     client IP address.
+
+3. ``chrome157_macos``, ``chrome156`` and ``chrome156_macos`` were not part of
+   this comparison because there was no reference browser for them.
+4. For reference only, not a pass criterion:
+   ``https://fp.impersonate.pro/api/cloudflare/protected`` returned the origin
+   response (``ok: true``) to every curl profile above and every reference
+   browser, with no ``cf-mitigated`` header (on the iPhone the status code and
+   headers could not be read, only the page body). A Cloudflare decision also
+   depends on IP reputation and site settings, so it does not show fingerprint
+   equivalence.
