@@ -85,6 +85,8 @@ SIGNATURE_IDS = {
     "rsa_pss_rsae_sha256": 0x0804, "rsa_pss_rsae_sha384": 0x0805,
     "rsa_pss_rsae_sha512": 0x0806, "ed25519": 0x0807,
     "mldsa44": 0x0904, "mldsa65": 0x0905, "mldsa87": 0x0906,
+    # Leading GREASE sigalg (BoringSSL grease_sigalgs); th1 parses it as TLS_GREASE.
+    "GREASE": -1,
 }
 COMPRESSION_IDS = {"zlib": 1, "brotli": 2, "zstd": 3}
 EXTENSION_NAMES = {
