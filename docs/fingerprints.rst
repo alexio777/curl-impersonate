@@ -115,8 +115,8 @@ HTTP/3 headers differ from their regular defaults.
 
 To generate or update profiles from JSON, see :doc:`dev`.
 
-Independent verification
-------------------------
+Независимая проверка (Independent verification)
+-----------------------------------------------
 
 On 2026-11-10 the profiles below were compared with the real browsers they
 impersonate, using public echo services:
